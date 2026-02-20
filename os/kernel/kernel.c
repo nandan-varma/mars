@@ -3,6 +3,7 @@
 #include "input.h"
 #include "gui.h"
 #include "timer.h"
+#include "memory.h"
 
 void kernel_main(const boot_info_t *boot_info) {
     framebuffer_init(boot_info);
@@ -12,6 +13,11 @@ void kernel_main(const boot_info_t *boot_info) {
     input_init(boot_info, boot_info->width, boot_info->height);
     gui_init(boot_info);
     timer_init(boot_info);
+
+    memory_init(boot_info);
+
+    EFI_PHYSICAL_ADDRESS warmup_page = memory_alloc_pages(1);
+    (void)warmup_page;
 
     gui_update();
     gui_render();

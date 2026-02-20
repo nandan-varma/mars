@@ -30,7 +30,7 @@ OBJCOPY := $(DETECTED_OBJCOPY)
 endif
 
 QEMU ?= qemu-system-x86_64
-QEMU_INPUT_DEVICES ?= -usb -device usb-tablet -device usb-mouse -device virtio-mouse-pci
+QEMU_INPUT_DEVICES ?=
 OVMF_CODE ?= $(or \
 	$(shell [ -f /opt/homebrew/share/edk2/ovmf/OVMF_CODE.fd ] && echo /opt/homebrew/share/edk2/ovmf/OVMF_CODE.fd), \
 	$(shell ls -1 /opt/homebrew/Cellar/qemu/*/share/qemu/edk2-x86_64-code.fd 2>/dev/null | tail -n 1))
@@ -86,6 +86,7 @@ SRCS := \
 	boot/efi_main.c \
 	kernel/kernel.c \
 	kernel/timer.c \
+	kernel/memory.c \
 	drivers/input.c \
 	drivers/keyboard_uefi.c \
 	drivers/mouse_uefi.c \
@@ -128,7 +129,7 @@ run: all
 	fi
 	@if [ -f "$(OVMF_VARS)" ]; then \
 		$(QEMU) \
-			-machine q35 -m 512M \
+			-machine pc -m 512M \
 			$(QEMU_INPUT_DEVICES) \
 			-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
 			-drive if=pflash,format=raw,file=$(OVMF_VARS) \
@@ -137,7 +138,7 @@ run: all
 	else \
 		echo "OVMF_VARS not found; running without vars pflash."; \
 		$(QEMU) \
-			-machine q35 -m 512M \
+			-machine pc -m 512M \
 			$(QEMU_INPUT_DEVICES) \
 			-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
 			-drive format=raw,file=fat:rw:$(ESP_DIR) \
@@ -151,7 +152,7 @@ debug: all
 	fi
 	@if [ -f "$(OVMF_VARS)" ]; then \
 		$(QEMU) \
-			-machine q35 -m 512M \
+			-machine pc -m 512M \
 			$(QEMU_INPUT_DEVICES) \
 			-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
 			-drive if=pflash,format=raw,file=$(OVMF_VARS) \
@@ -160,7 +161,7 @@ debug: all
 	else \
 		echo "OVMF_VARS not found; running debug without vars pflash."; \
 		$(QEMU) \
-			-machine q35 -m 512M \
+			-machine pc -m 512M \
 			$(QEMU_INPUT_DEVICES) \
 			-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
 			-drive format=raw,file=fat:rw:$(ESP_DIR) \

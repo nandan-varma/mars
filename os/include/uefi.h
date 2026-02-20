@@ -274,6 +274,9 @@ struct EFI_SYSTEM_TABLE {
 };
 
 #define EfiLoaderData ((EFI_MEMORY_TYPE)4)
+#define EfiBootServicesCode ((EFI_MEMORY_TYPE)3)
+#define EfiBootServicesData ((EFI_MEMORY_TYPE)4)
+#define EfiConventionalMemory ((EFI_MEMORY_TYPE)7)
 
 #define EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID \
     (EFI_GUID) { 0x9042A9DE, 0x23DC, 0x4A38, { 0x96, 0xFB, 0x7A, 0xDE, 0xD0, 0x80, 0x51, 0x6A } }
@@ -289,6 +292,11 @@ struct EFI_SYSTEM_TABLE {
 
 #define EFI_ABSP_TouchActive 0x00000001
 
+#define SCAN_UP 0x0001
+#define SCAN_DOWN 0x0002
+#define SCAN_RIGHT 0x0003
+#define SCAN_LEFT 0x0004
 #define SCAN_DELETE 0x0008
+
 
 #endif

@@ -10,9 +10,12 @@ typedef struct {
     UINT32 height;
     UINT32 pixels_per_scanline;
 
-    EFI_SYSTEM_TABLE *system_table;
     EFI_BOOT_SERVICES *boot_services;
-    EFI_RUNTIME_SERVICES *runtime_services;
+
+    EFI_MEMORY_DESCRIPTOR *memory_map;
+    UINTN memory_map_size;
+    UINTN memory_descriptor_size;
+    UINT32 memory_descriptor_version;
 
     EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL *text_input_ex;
     EFI_SIMPLE_POINTER_PROTOCOL *simple_pointer;

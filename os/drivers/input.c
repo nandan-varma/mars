@@ -25,6 +25,49 @@ static void queue_push(const input_event_t *event) {
     g_tail = (g_tail + 1) % INPUT_QUEUE_CAPACITY;
 }
 
+static void queue_mouse_move(INT32 dx, INT32 dy) {
+    mouse_driver_inject_move(dx, dy);
+
+    input_event_t move_event;
+    move_event.type = INPUT_EVENT_MOUSE_MOVE;
+    move_event.data.mouse_move.dx = dx;
+    move_event.data.mouse_move.dy = dy;
+    move_event.data.mouse_move.x = mouse_driver_x();
+    move_event.data.mouse_move.y = mouse_driver_y();
+    queue_push(&move_event);
+}
+
+static void queue_left_button(BOOLEAN down) {
+    if (!mouse_driver_set_left(down)) {
+        return;
+    }
+
+    input_event_t button_event;
+    button_event.type = down ? INPUT_EVENT_MOUSE_BUTTON_DOWN : INPUT_EVENT_MOUSE_BUTTON_UP;
+    button_event.data.mouse_button.left = down;
+    button_event.data.mouse_button.right = FALSE;
+    queue_push(&button_event);
+}
+
+static void synthesize_mouse_from_key(const input_event_t *key_event) {
+    const UINT16 scan = key_event->data.key.scan_code;
+    const CHAR16 unicode = key_event->data.key.unicode;
+    const INT32 step = 12;
+
+    if (scan == SCAN_LEFT) {
+        queue_mouse_move(-step, 0);
+    } else if (scan == SCAN_RIGHT) {
+        queue_mouse_move(step, 0);
+    } else if (scan == SCAN_UP) {
+        queue_mouse_move(0, -step);
+    } else if (scan == SCAN_DOWN) {
+        queue_mouse_move(0, step);
+    } else if (unicode == L' ' || unicode == L'\r') {
+        queue_left_button(TRUE);
+        queue_left_button(FALSE);
+    }
+}
+
 void input_init(const boot_info_t *boot_info, UINT32 screen_w, UINT32 screen_h) {
     g_head = 0;
     g_tail = 0;
@@ -43,6 +86,7 @@ void input_poll(void) {
     input_event_t event;
     if (keyboard_driver_poll(&event)) {
         queue_push(&event);
+        synthesize_mouse_from_key(&event);
     }
 
     input_event_t mouse_events[3];

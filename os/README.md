@@ -93,7 +93,8 @@ Output:
 - `make -C os run`
 
 Notes:
-- `Makefile` adds `-device qemu-xhci -device usb-tablet` by default for stable mouse input.
+- `Makefile` uses `-machine pc` with no USB pointer override, favoring legacy PS/2 input routing.
+- Mouse polling priority is `PS/2` first, then `AbsolutePointer`, then `SimplePointer` fallback.
 - If the cursor seems stuck, click once inside the QEMU window to capture pointer focus.
 
 ### Expected behavior
@@ -101,6 +102,7 @@ Notes:
 - Mouse cursor moves.
 - Button shows pressed visual state and toggles background accent on click.
 - Text field accepts basic printable keyboard input after focus click.
+- Debug line includes pointer path flags: `S` (Simple), `A` (Absolute), `P` (PS/2).
 
 ## Debugging Instructions
 

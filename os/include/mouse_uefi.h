@@ -18,5 +18,7 @@ BOOLEAN mouse_driver_left_down(void);
 BOOLEAN mouse_driver_has_simple(void);
 BOOLEAN mouse_driver_has_absolute(void);
 BOOLEAN mouse_driver_has_ps2(void);
+void mouse_driver_inject_move(INT32 dx, INT32 dy);
+BOOLEAN mouse_driver_set_left(BOOLEAN down);
 
 #endif

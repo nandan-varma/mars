@@ -2,21 +2,12 @@
 #include "font8x16.h"
 
 static framebuffer_t g_framebuffer;
-static UINT32 *g_backbuffer;
 
 void framebuffer_init(const boot_info_t *boot_info) {
     g_framebuffer.base = (UINT32 *)(UINTN)boot_info->framebuffer_base;
-    g_framebuffer.size = boot_info->framebuffer_size;
     g_framebuffer.width = boot_info->width;
     g_framebuffer.height = boot_info->height;
     g_framebuffer.pitch = boot_info->pixels_per_scanline;
-
-    (void)boot_info;
-    g_backbuffer = NULL;
-}
-
-const framebuffer_t *framebuffer_get(void) {
-    return &g_framebuffer;
 }
 
 void drawPixel(INT32 x, INT32 y, UINT32 color) {
@@ -28,11 +19,7 @@ void drawPixel(INT32 x, INT32 y, UINT32 color) {
     }
 
     UINTN offset = (UINTN)y * g_framebuffer.pitch + (UINTN)x;
-    if (g_backbuffer != NULL) {
-        g_backbuffer[offset] = color;
-    } else {
-        g_framebuffer.base[offset] = color;
-    }
+    g_framebuffer.base[offset] = color;
 }
 
 void drawRect(INT32 x, INT32 y, INT32 width, INT32 height, UINT32 color) {

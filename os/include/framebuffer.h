@@ -6,14 +6,12 @@
 
 typedef struct {
     UINT32 *base;
-    UINTN size;
     UINT32 width;
     UINT32 height;
     UINT32 pitch;
 } framebuffer_t;
 
 void framebuffer_init(const boot_info_t *boot_info);
-const framebuffer_t *framebuffer_get(void);
 
 void drawPixel(INT32 x, INT32 y, UINT32 color);
 void drawRect(INT32 x, INT32 y, INT32 width, INT32 height, UINT32 color);

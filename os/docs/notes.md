@@ -11,9 +11,9 @@
 - Avoided: hardware acceleration, compositor, transparency.
 
 ## Input
-- Chosen: UEFI `SimpleTextInputEx` and `SimplePointer` protocols.
-- Why: no USB/PS2 controller stack required in MVP.
-- Avoided: USB HID stack and full PS/2 stack in early milestones.
+- Chosen: UEFI `SimpleTextInputEx` plus layered mouse input (`AbsolutePointer`/`SimplePointer`) with bounded PS/2 fallback.
+- Why: keeps MVP mostly UEFI-native while providing a deterministic fallback path on firmware/device combinations where UEFI pointer protocols are unreliable.
+- Avoided: USB HID stack and full multitier input subsystem complexity.
 
 ## GUI
 - Chosen: single-window immediate-mode style redraw per frame.
