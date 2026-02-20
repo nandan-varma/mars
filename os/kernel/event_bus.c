@@ -95,12 +95,16 @@ BOOLEAN event_bus_publish(const event_packet_t *packet) {
 
     BOOLEAN accepted = queue_push(g_channel_queue, &g_channel_head, &g_channel_tail, packet);
 
+    if (packet->target_pid == 0) {
+        return accepted;
+    }
+
     for (UINTN i = 0; i < EVENT_MAX_PROCESSES; ++i) {
         if (!g_queues[i].active) {
             continue;
         }
 
-        if (packet->target_pid != 0 && packet->target_pid != g_queues[i].pid) {
+        if (packet->target_pid != g_queues[i].pid) {
             continue;
         }
 

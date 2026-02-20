@@ -18,24 +18,9 @@
 
 static void on_timer_interrupt(UINTN vector, UINT64 a, UINT64 b, UINT64 c) {
     (void)vector;
+    (void)a;
     (void)b;
     (void)c;
-
-    event_packet_t packet;
-    packet.channel = EVENT_CHANNEL_SYSTEM;
-    packet.code = EVENT_CODE_TIMER_TICK;
-    packet.source_pid = 0;
-    packet.target_pid = 0;
-    packet.target_window = 0;
-    packet.payload_size = sizeof(UINT64);
-    UINT8 *bytes = (UINT8 *)&a;
-    for (UINTN i = 0; i < sizeof(UINT64); ++i) {
-        packet.payload[i] = bytes[i];
-    }
-    for (UINTN i = sizeof(UINT64); i < EVENT_PAYLOAD_BYTES; ++i) {
-        packet.payload[i] = 0;
-    }
-    (void)event_bus_publish(&packet);
 }
 
 static void on_syscall_interrupt(UINTN vector, UINT64 a, UINT64 b, UINT64 c) {

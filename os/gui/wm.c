@@ -341,7 +341,7 @@ void wm_dispatch_input(void) {
 
         if (event.type == INPUT_EVENT_MOUSE_MOVE) {
             handle_mouse_move(&event);
-        } else if (event.type == INPUT_EVENT_MOUSE_BUTTON_DOWN && event.data.mouse_button.left) {
+        } else if (event.type == INPUT_EVENT_MOUSE_BUTTON_DOWN) {
             handle_button_down();
             forward_input_to_focused_window(&event);
             g_dirty = TRUE;
