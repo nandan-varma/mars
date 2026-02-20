@@ -12,12 +12,13 @@
 
 #define WM_MAX_WINDOWS 16
 #define START_BUTTON_W 72
-#define START_BUTTON_H 20
-#define START_MENU_W 220
-#define START_MENU_ITEM_H 24
+#define START_BUTTON_H 22
+#define START_MENU_W 238
+#define START_MENU_ITEM_H 26
 #define START_MENU_ITEM_COUNT 6
 #define WM_POINTER_EVENTS_PER_STEP 16
 #define WM_KEY_EVENTS_PER_STEP 8
+#define TASKBAR_H 30
 
 static wm_window_t g_windows[WM_MAX_WINDOWS];
 static UINTN g_window_count;
@@ -69,6 +70,64 @@ static void append_text(CHAR16 *dst, UINTN max_chars, const CHAR16 *src) {
     dst[len] = 0;
 }
 
+static UINT32 rgb_blend(UINT32 a, UINT32 b, UINTN num, UINTN den) {
+    if (den == 0) {
+        return a;
+    }
+
+    UINT32 ar = (a >> 16) & 0xFF;
+    UINT32 ag = (a >> 8) & 0xFF;
+    UINT32 ab = a & 0xFF;
+
+    UINT32 br = (b >> 16) & 0xFF;
+    UINT32 bg = (b >> 8) & 0xFF;
+    UINT32 bb = b & 0xFF;
+
+    UINT32 rr = (UINT32)((((UINT64)ar * (den - num)) + ((UINT64)br * num)) / den);
+    UINT32 rg = (UINT32)((((UINT64)ag * (den - num)) + ((UINT64)bg * num)) / den);
+    UINT32 rb = (UINT32)((((UINT64)ab * (den - num)) + ((UINT64)bb * num)) / den);
+
+    return (rr << 16) | (rg << 8) | rb;
+}
+
+static void format_two_digits(UINTN value, CHAR16 *out) {
+    if (out == NULL) {
+        return;
+    }
+
+    out[0] = (CHAR16)(L'0' + ((value / 10) % 10));
+    out[1] = (CHAR16)(L'0' + (value % 10));
+    out[2] = 0;
+}
+
+static void format_time(UINT64 ticks, CHAR16 *out, UINTN max_chars) {
+    if (out == NULL || max_chars < 9) {
+        return;
+    }
+
+    UINT64 total_seconds = ticks / 1000;
+    UINTN hour = (UINTN)((total_seconds / 3600) % 24);
+    UINTN minute = (UINTN)((total_seconds / 60) % 60);
+    UINTN second = (UINTN)(total_seconds % 60);
+
+    CHAR16 hh[3];
+    CHAR16 mm[3];
+    CHAR16 ss[3];
+    format_two_digits(hour, hh);
+    format_two_digits(minute, mm);
+    format_two_digits(second, ss);
+
+    out[0] = hh[0];
+    out[1] = hh[1];
+    out[2] = L':';
+    out[3] = mm[0];
+    out[4] = mm[1];
+    out[5] = L':';
+    out[6] = ss[0];
+    out[7] = ss[1];
+    out[8] = 0;
+}
+
 static void to_decimal(UINT64 value, CHAR16 *out, UINTN max_chars) {
     if (out == NULL || max_chars == 0) {
         return;
@@ -104,13 +163,15 @@ static void render_debug_overlay(void) {
     append_text(text, 96, L"FPS ");
     to_decimal(g_fps_value, value, 24);
     append_text(text, 96, value);
-    append_text(text, 96, L"  P ");
+    append_text(text, 96, L"  PROC ");
     to_decimal((UINT64)process_running_count(), value, 24);
     append_text(text, 96, value);
-    append_text(text, 96, L"  T ");
+    append_text(text, 96, L"  TASK ");
     to_decimal((UINT64)scheduler_task_count(), value, 24);
     append_text(text, 96, value);
-    drawString(12, 12, text, 0x00D0E8FF, 0x00101820);
+    drawRect(8, 8, 356, 44, 0x00151F2E);
+    drawRect(9, 9, 354, 42, 0x00111A27);
+    drawString(16, 14, text, 0x00D7E6F8, 0x00111A27);
 
     text[0] = 0;
     append_text(text, 96, L"Tick ");
@@ -123,7 +184,24 @@ static void render_debug_overlay(void) {
     to_decimal((UINT64)(heap_total_bytes() / 1024), value, 24);
     append_text(text, 96, value);
     append_text(text, 96, L" KB");
-    drawString(12, 30, text, 0x00A8C8E8, 0x00101820);
+    drawString(16, 32, text, 0x00A8C8E8, 0x00111A27);
+}
+
+static void render_desktop_background(void) {
+    UINT32 top = 0x00081224;
+    UINT32 bottom = 0x00112E52;
+    UINT32 h = g_desktop_h > TASKBAR_H ? (g_desktop_h - TASKBAR_H) : g_desktop_h;
+
+    for (UINT32 y = 0; y < h; ++y) {
+        UINT32 line_color = rgb_blend(top, bottom, y, h == 0 ? 1 : h);
+        drawRect(0, (INT32)y, (INT32)g_desktop_w, 1, line_color);
+    }
+
+    for (UINT32 y = 60; y + 2 < h; y += 44) {
+        for (UINT32 x = 40; x + 2 < g_desktop_w; x += 44) {
+            drawRect((INT32)x, (INT32)y, 2, 2, 0x00173A61);
+        }
+    }
 }
 
 static INT32 clamp_i32(INT32 value, INT32 low, INT32 high) {
@@ -314,7 +392,7 @@ static wm_window_t *top_window_at(INT32 mouse_x, INT32 mouse_y) {
 }
 
 static BOOLEAN handle_start_menu_click(INT32 mouse_x, INT32 mouse_y) {
-    INT32 taskbar_y = (INT32)g_desktop_h - 28;
+    INT32 taskbar_y = (INT32)g_desktop_h - TASKBAR_H;
     INT32 start_x = 6;
     INT32 start_y = taskbar_y + 4;
 
@@ -338,7 +416,7 @@ static BOOLEAN handle_start_menu_click(INT32 mouse_x, INT32 mouse_y) {
         return FALSE;
     }
 
-    INT32 local_y = mouse_y - (menu_y + 4);
+    INT32 local_y = mouse_y - (menu_y + 28);
     if (local_y < 0) {
         return TRUE;
     }
@@ -493,29 +571,36 @@ static void render_window(const wm_window_t *window) {
         return;
     }
 
-    UINT32 frame_color = window->focused ? 0x00A0C8FF : 0x00708090;
-    UINT32 body_color = 0x00ECEFF4;
-    UINT32 title_bg = window->focused ? 0x003067B1 : 0x004A5568;
+    UINT32 frame_color = window->focused ? 0x0079B7FF : 0x00596A80;
+    UINT32 body_color = 0x00E7ECF2;
+    UINT32 title_bg = window->focused ? 0x00315FAA : 0x00425065;
+    UINT32 title_text = 0x00F4F8FF;
+
+    drawRect(window->x + 4, window->y + 4, window->width, window->height, 0x000B1220);
+    drawRect(window->x + 2, window->y + 2, window->width, window->height, 0x00132030);
 
     drawRect(window->x, window->y, window->width, window->height, frame_color);
-    drawRect(window->x + 1, window->y + 1, window->width - 2, window->height - 2, body_color);
+    drawRect(window->x + 1, window->y + 1, window->width - 2, window->height - 2, 0x00C8D6E7);
+    drawRect(window->x + 2, window->y + 2, window->width - 4, window->height - 4, body_color);
     drawRect(window->x, window->y, window->width, 24, title_bg);
-    drawString(window->x + 8, window->y + 6, window->title, 0x00FFFFFF, title_bg);
+    drawRect(window->x + 2, window->y + 24, window->width - 4, 1, 0x00C0CCDA);
+    drawString(window->x + 10, window->y + 6, window->title, title_text, title_bg);
 
     INT32 min_x = window->x + window->width - 40;
     INT32 min_y = window->y + 4;
     INT32 close_x = window->x + window->width - 20;
     INT32 close_y = window->y + 4;
-    drawRect(min_x, min_y, 14, 14, 0x00C0A040);
-    drawRect(close_x, close_y, 14, 14, 0x00C04040);
-    drawString(min_x + 5, min_y + 2, L"_", 0x00FFFFFF, 0x00C0A040);
-    drawString(close_x + 4, close_y + 2, L"X", 0x00FFFFFF, 0x00C04040);
+    drawRect(min_x, min_y, 14, 14, 0x00B1913E);
+    drawRect(close_x, close_y, 14, 14, 0x00B84A4A);
+    drawString(min_x + 5, min_y + 2, L"_", 0x00FFFFFF, 0x00B1913E);
+    drawString(close_x + 4, close_y + 2, L"X", 0x00FFFFFF, 0x00B84A4A);
 
-    drawRect(window->x + window->width - 10, window->y + window->height - 10, 8, 8, 0x00607080);
+    drawRect(window->x + window->width - 10, window->y + window->height - 10, 8, 8, 0x0077899E);
 
     UINTN index = window_index_by_id(window->id);
     if (index < g_window_count && g_content[index][0] != 0) {
-        drawString(window->x + 10, window->y + 34, g_content[index], 0x00101820, body_color);
+        drawRect(window->x + 8, window->y + 30, window->width - 16, 20, 0x00EAF0F7);
+        drawString(window->x + 12, window->y + 34, g_content[index], 0x00101A27, 0x00EAF0F7);
     }
 }
 
@@ -524,18 +609,26 @@ static void render_start_menu(void) {
         return;
     }
 
-    INT32 taskbar_y = (INT32)g_desktop_h - 28;
+    INT32 taskbar_y = (INT32)g_desktop_h - TASKBAR_H;
     INT32 menu_x = 6;
     INT32 menu_h = START_MENU_ITEM_COUNT * START_MENU_ITEM_H + 8;
     INT32 menu_y = taskbar_y - menu_h;
+    INT32 mouse_x = input_mouse_x();
+    INT32 mouse_y = input_mouse_y();
 
+    drawRect(menu_x + 2, menu_y + 2, START_MENU_W, menu_h, 0x00101928);
     drawRect(menu_x, menu_y, START_MENU_W, menu_h, 0x00354456);
-    drawRect(menu_x + 1, menu_y + 1, START_MENU_W - 2, menu_h - 2, 0x00EDF2F7);
+    drawRect(menu_x + 1, menu_y + 1, START_MENU_W - 2, menu_h - 2, 0x00EAF0F8);
+    drawRect(menu_x + 1, menu_y + 1, START_MENU_W - 2, 24, 0x00315FAA);
+    drawString(menu_x + 10, menu_y + 6, L"Applications", 0x00FFFFFF, 0x00315FAA);
 
     for (UINTN i = 0; i < START_MENU_ITEM_COUNT; ++i) {
-        INT32 item_y = menu_y + 4 + (INT32)i * START_MENU_ITEM_H;
-        drawRect(menu_x + 4, item_y, START_MENU_W - 8, START_MENU_ITEM_H - 2, 0x00DDE5EF);
-        drawString(menu_x + 10, item_y + 6, g_start_items[i].label, 0x00101820, 0x00DDE5EF);
+        INT32 item_y = menu_y + 28 + (INT32)i * START_MENU_ITEM_H;
+        BOOLEAN hovered = point_in_rect(mouse_x, mouse_y, menu_x + 4, item_y, START_MENU_W - 8, START_MENU_ITEM_H - 2);
+        UINT32 item_color = hovered ? 0x00CFE0F8 : 0x00DDE7F2;
+        UINT32 text_color = hovered ? 0x000B2B55 : 0x00101820;
+        drawRect(menu_x + 4, item_y, START_MENU_W - 8, START_MENU_ITEM_H - 2, item_color);
+        drawString(menu_x + 10, item_y + 7, g_start_items[i].label, text_color, item_color);
     }
 }
 
@@ -550,7 +643,7 @@ void wm_render(void) {
         g_fps_last_tick = now;
     }
 
-    clearScreen(0x00101820);
+    render_desktop_background();
     BOOLEAN rendered_flags[WM_MAX_WINDOWS];
     for (UINTN i = 0; i < WM_MAX_WINDOWS; ++i) {
         rendered_flags[i] = FALSE;
@@ -575,16 +668,28 @@ void wm_render(void) {
         }
     }
 
-    drawRect(0, (INT32)g_desktop_h - 28, (INT32)g_desktop_w, 28, 0x00222B3A);
-    drawRect(6, (INT32)g_desktop_h - 24, START_BUTTON_W, START_BUTTON_H, g_start_menu_open ? 0x005080C0 : 0x003067B1);
-    drawString(20, (INT32)g_desktop_h - 19, L"Start", 0x00FFFFFF, g_start_menu_open ? 0x005080C0 : 0x003067B1);
-    drawString(90, (INT32)g_desktop_h - 20, L"Mars Desktop", 0x00FFFFFF, 0x00222B3A);
+    INT32 taskbar_y = (INT32)g_desktop_h - TASKBAR_H;
+    UINT32 taskbar_bg = 0x001C2738;
+    UINT32 start_bg = g_start_menu_open ? 0x004E8BCE : 0x00315FAA;
+
+    drawRect(0, taskbar_y, (INT32)g_desktop_w, TASKBAR_H, taskbar_bg);
+    drawRect(0, taskbar_y, (INT32)g_desktop_w, 1, 0x004A5A70);
+    drawRect(6, taskbar_y + 4, START_BUTTON_W, START_BUTTON_H, start_bg);
+    drawRect(7, taskbar_y + 5, START_BUTTON_W - 2, START_BUTTON_H - 2, g_start_menu_open ? 0x005B98DB : 0x003B6CB8);
+    drawString(20, taskbar_y + 7, L"Start", 0x00FFFFFF, g_start_menu_open ? 0x005B98DB : 0x003B6CB8);
+    drawString(90, taskbar_y + 8, L"Mars Desktop", 0x00CFE1F6, taskbar_bg);
+
+    CHAR16 time_text[16];
+    format_time(now, time_text, 16);
+    drawRect((INT32)g_desktop_w - 92, taskbar_y + 4, 84, START_BUTTON_H, 0x002A3548);
+    drawString((INT32)g_desktop_w - 84, taskbar_y + 8, time_text, 0x00DDEBFF, 0x002A3548);
 
     render_debug_overlay();
 
     render_start_menu();
 
     drawRect(input_mouse_x(), input_mouse_y(), 6, 10, 0x00FFFFFF);
+    drawRect(input_mouse_x() + 1, input_mouse_y() + 1, 4, 8, 0x000B1E38);
     framebuffer_present();
     g_dirty = FALSE;
 }
