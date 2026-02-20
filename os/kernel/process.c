@@ -55,9 +55,15 @@ UINT32 process_create_kernel(const CHAR16 *name, task_entry_t entry, void *conte
     process->state = PROCESS_RUNNING;
     process->capabilities = capabilities;
     process->exit_code = 0;
-    process->vm_root = vm_pml4_physical();
+    process->vm_root = vm_create_address_space();
+    if (process->vm_root == 0) {
+        process->vm_root = vm_pml4_physical();
+    }
     process->task_id = scheduler_create_task(process->pid, name, priority, entry, context);
     if (process->task_id == 0) {
+        if (process->vm_root != 0 && process->vm_root != vm_pml4_physical()) {
+            (void)vm_release_address_space(process->vm_root);
+        }
         process->pid = 0;
         process->state = PROCESS_NEW;
         process->exit_code = -1;
@@ -78,6 +84,10 @@ void process_exit(UINT32 pid, INT32 exit_code) {
     process->exit_code = exit_code;
     scheduler_stop_task(process->task_id);
     process->task_id = 0;
+    if (process->vm_root != 0 && process->vm_root != vm_pml4_physical()) {
+        (void)vm_release_address_space(process->vm_root);
+        process->vm_root = 0;
+    }
     event_bus_unregister_process(pid);
 }
 

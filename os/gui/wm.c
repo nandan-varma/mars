@@ -4,6 +4,8 @@
 #include "framebuffer.h"
 #include "heap.h"
 #include "input.h"
+#include "diag.h"
+#include "memory.h"
 #include "os_string.h"
 #include "platform.h"
 #include "process.h"
@@ -41,6 +43,7 @@ static UINT32 g_fps_counter;
 static UINT32 g_fps_value;
 static BOOLEAN g_show_debug_overlay;
 static UINT64 g_clock_last_second;
+static BOOLEAN g_clock_only_redraw;
 static UINT64 g_fallback_clock_second;
 static UINTN g_fallback_clock_hz;
 
@@ -291,8 +294,8 @@ static void render_debug_overlay(void) {
     append_text(text, 96, L"  TASK ");
     to_decimal((UINT64)scheduler_task_count(), value, 24);
     append_text(text, 96, value);
-    drawRect(8, 8, 356, 60, 0x00151F2E);
-    drawRect(9, 9, 354, 58, 0x00111A27);
+    drawRect(8, 8, 356, 108, 0x00151F2E);
+    drawRect(9, 9, 354, 106, 0x00111A27);
     drawString(16, 14, text, 0x00D7E6F8, 0x00111A27);
 
     text[0] = 0;
@@ -309,13 +312,52 @@ static void render_debug_overlay(void) {
     drawString(16, 32, text, 0x00A8C8E8, 0x00111A27);
 
     text[0] = 0;
-    append_text(text, 96, L"Event drops ch=");
+    append_text(text, 96, L"Drops ch=");
     to_decimal(event_bus_channel_drop_count(), value, 24);
     append_text(text, 96, value);
     append_text(text, 96, L" pid=");
     to_decimal(event_bus_process_drop_count(), value, 24);
     append_text(text, 96, value);
     drawString(16, 50, text, 0x0096BAD9, 0x00111A27);
+
+    text[0] = 0;
+    append_text(text, 96, L"Depth in=");
+    to_decimal((UINT64)event_bus_channel_depth(EVENT_CHANNEL_INPUT), value, 24);
+    append_text(text, 96, value);
+    append_text(text, 96, L" key=");
+    to_decimal((UINT64)event_bus_channel_depth(EVENT_CHANNEL_INPUT_KEYBOARD), value, 24);
+    append_text(text, 96, value);
+    append_text(text, 96, L" sys=");
+    to_decimal((UINT64)event_bus_channel_depth(EVENT_CHANNEL_SYSTEM), value, 24);
+    append_text(text, 96, value);
+    drawString(16, 66, text, 0x0087B4D8, 0x00111A27);
+
+    text[0] = 0;
+    append_text(text, 96, L"Stage ");
+    to_decimal((UINT64)diag_stage(), value, 24);
+    append_text(text, 96, value);
+    append_text(text, 96, L"  Pg ");
+    to_decimal((UINT64)memory_outstanding_pages(), value, 24);
+    append_text(text, 96, value);
+    append_text(text, 96, L" a=");
+    to_decimal((UINT64)memory_page_alloc_count(), value, 24);
+    append_text(text, 96, value);
+    append_text(text, 96, L" f=");
+    to_decimal((UINT64)memory_page_free_count(), value, 24);
+    append_text(text, 96, value);
+    drawString(16, 82, text, 0x007AA6CB, 0x00111A27);
+
+    text[0] = 0;
+    append_text(text, 96, L"Input st=");
+    to_decimal((UINT64)input_lifecycle_state(), value, 24);
+    append_text(text, 96, value);
+    append_text(text, 96, L" p=");
+    to_decimal(input_published_count(), value, 24);
+    append_text(text, 96, value);
+    append_text(text, 96, L" d=");
+    to_decimal(input_drop_count(), value, 24);
+    append_text(text, 96, value);
+    drawString(16, 98, text, 0x006B9ABF, 0x00111A27);
 }
 
 static void render_desktop_background(void) {
@@ -449,6 +491,7 @@ void wm_init(UINT32 desktop_w, UINT32 desktop_h) {
     g_fps_value = 0;
     g_show_debug_overlay = TRUE;
     g_clock_last_second = (UINT64)-1;
+    g_clock_only_redraw = FALSE;
     g_fallback_clock_second = 0;
     g_fallback_clock_hz = timer_hz();
 
@@ -802,6 +845,7 @@ static void render_start_menu(void) {
 }
 
 void wm_render(void) {
+    BOOLEAN clock_only = g_clock_only_redraw;
     UINT64 now = timer_ticks();
     g_clock_last_second = current_second_of_day();
     ++g_fps_counter;
@@ -813,28 +857,32 @@ void wm_render(void) {
         g_fps_last_tick = now;
     }
 
-    render_desktop_background();
+    if (!clock_only) {
+        render_desktop_background();
+    }
     BOOLEAN rendered_flags[WM_MAX_WINDOWS];
     for (UINTN i = 0; i < WM_MAX_WINDOWS; ++i) {
         rendered_flags[i] = FALSE;
     }
 
-    for (UINTN rendered = 0; rendered < g_window_count; ++rendered) {
-        UINTN best_index = g_window_count;
-        UINT8 best_z = 0xFF;
-        for (UINTN i = 0; i < g_window_count; ++i) {
-            if (!g_windows[i].visible || rendered_flags[i] || g_windows[i].z > best_z) {
-                continue;
+    if (!clock_only) {
+        for (UINTN rendered = 0; rendered < g_window_count; ++rendered) {
+            UINTN best_index = g_window_count;
+            UINT8 best_z = 0xFF;
+            for (UINTN i = 0; i < g_window_count; ++i) {
+                if (!g_windows[i].visible || rendered_flags[i] || g_windows[i].z > best_z) {
+                    continue;
+                }
+
+                best_z = g_windows[i].z;
+                best_index = i;
             }
 
-            best_z = g_windows[i].z;
-            best_index = i;
-        }
-
-        if (best_index < g_window_count) {
-            render_window(&g_windows[best_index]);
-            g_windows[best_index].invalidated = FALSE;
-            rendered_flags[best_index] = TRUE;
+            if (best_index < g_window_count) {
+                render_window(&g_windows[best_index]);
+                g_windows[best_index].invalidated = FALSE;
+                rendered_flags[best_index] = TRUE;
+            }
         }
     }
 
@@ -858,27 +906,41 @@ void wm_render(void) {
         render_debug_overlay();
     }
 
-    render_start_menu();
+    if (!clock_only) {
+        render_start_menu();
+    }
 
     drawRect(input_mouse_x(), input_mouse_y(), 6, 10, 0x00FFFFFF);
     drawRect(input_mouse_x() + 1, input_mouse_y() + 1, 4, 8, 0x000B1E38);
-    framebuffer_present();
+    if (clock_only) {
+        framebuffer_present_region(0, taskbar_y, (INT32)g_desktop_w, TASKBAR_H);
+        if (g_show_debug_overlay) {
+            framebuffer_present_region(8, 8, 356, 108);
+        }
+        framebuffer_present_region(input_mouse_x(), input_mouse_y(), 8, 12);
+    } else {
+        framebuffer_present();
+    }
     g_dirty = FALSE;
+    g_clock_only_redraw = FALSE;
 }
 
 BOOLEAN wm_needs_redraw(void) {
     if (g_dirty) {
+        g_clock_only_redraw = FALSE;
         return TRUE;
     }
 
     UINT64 second = current_second_of_day();
     if (second != g_clock_last_second) {
         g_dirty = TRUE;
+        g_clock_only_redraw = TRUE;
         return TRUE;
     }
 
     for (UINTN i = 0; i < g_window_count; ++i) {
         if (g_windows[i].invalidated) {
+            g_clock_only_redraw = FALSE;
             return TRUE;
         }
     }

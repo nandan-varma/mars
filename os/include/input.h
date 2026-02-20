@@ -31,9 +31,23 @@ typedef struct {
     } data;
 } input_event_t;
 
+typedef enum {
+    INPUT_LIFECYCLE_UNINITIALIZED = 0,
+    INPUT_LIFECYCLE_PROBED,
+    INPUT_LIFECYCLE_STARTED,
+    INPUT_LIFECYCLE_STOPPED
+} input_lifecycle_state_t;
+
 void input_init(const platform_context_t *platform, UINT32 screen_w, UINT32 screen_h);
+void input_stop(void);
 void input_poll(void);
 BOOLEAN input_pop_event(input_event_t *out_event);
+input_lifecycle_state_t input_lifecycle_state(void);
+UINT64 input_poll_count(void);
+UINT64 input_published_count(void);
+UINT64 input_drop_count(void);
+UINT64 input_keyboard_poll_count(void);
+UINT64 input_mouse_poll_count(void);
 
 INT32 input_mouse_x(void);
 INT32 input_mouse_y(void);

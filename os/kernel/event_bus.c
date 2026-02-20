@@ -19,6 +19,7 @@ typedef struct {
 
 static process_event_queue_t g_queues[EVENT_MAX_PROCESSES];
 static channel_event_queue_t g_channel_queues[EVENT_CHANNEL_COUNT];
+static event_backpressure_policy_t g_channel_policy[EVENT_CHANNEL_COUNT];
 static UINT64 g_channel_drop_count;
 static UINT64 g_process_drop_count;
 
@@ -51,6 +52,14 @@ static BOOLEAN queue_pop(event_packet_t *queue, UINTN *head, UINTN *tail, event_
     return TRUE;
 }
 
+static UINTN queue_depth(UINTN head, UINTN tail) {
+    if (tail >= head) {
+        return tail - head;
+    }
+
+    return EVENT_QUEUE_CAPACITY - (head - tail);
+}
+
 void event_bus_init(void) {
     g_channel_drop_count = 0;
     g_process_drop_count = 0;
@@ -58,6 +67,7 @@ void event_bus_init(void) {
     for (UINTN channel = 0; channel < EVENT_CHANNEL_COUNT; ++channel) {
         g_channel_queues[channel].head = 0;
         g_channel_queues[channel].tail = 0;
+        g_channel_policy[channel] = EVENT_BACKPRESSURE_DROP_NEWEST;
     }
 
     for (UINTN i = 0; i < EVENT_MAX_PROCESSES; ++i) {
@@ -110,7 +120,16 @@ BOOLEAN event_bus_publish(const event_packet_t *packet) {
         channel_event_queue_t *channel_queue = &g_channel_queues[packet->channel];
         accepted = queue_push(channel_queue->queue, &channel_queue->head, &channel_queue->tail, packet);
         if (!accepted) {
-            ++g_channel_drop_count;
+            if (g_channel_policy[packet->channel] == EVENT_BACKPRESSURE_DROP_OLDEST) {
+                event_packet_t dropped;
+                if (queue_pop(channel_queue->queue, &channel_queue->head, &channel_queue->tail, &dropped)) {
+                    accepted = queue_push(channel_queue->queue, &channel_queue->head, &channel_queue->tail, packet);
+                }
+            }
+
+            if (!accepted) {
+                ++g_channel_drop_count;
+            }
         }
     }
 
@@ -163,6 +182,44 @@ BOOLEAN event_bus_receive_channel(UINT32 channel, event_packet_t *out_packet) {
 
     channel_event_queue_t *channel_queue = &g_channel_queues[channel];
     return queue_pop(channel_queue->queue, &channel_queue->head, &channel_queue->tail, out_packet);
+}
+
+BOOLEAN event_bus_set_channel_policy(UINT32 channel, event_backpressure_policy_t policy) {
+    if (channel >= EVENT_CHANNEL_COUNT) {
+        return FALSE;
+    }
+
+    g_channel_policy[channel] = policy;
+    return TRUE;
+}
+
+event_backpressure_policy_t event_bus_channel_policy(UINT32 channel) {
+    if (channel >= EVENT_CHANNEL_COUNT) {
+        return EVENT_BACKPRESSURE_DROP_NEWEST;
+    }
+
+    return g_channel_policy[channel];
+}
+
+UINTN event_bus_channel_depth(UINT32 channel) {
+    if (channel >= EVENT_CHANNEL_COUNT) {
+        return 0;
+    }
+
+    channel_event_queue_t *queue = &g_channel_queues[channel];
+    return queue_depth(queue->head, queue->tail);
+}
+
+UINTN event_bus_process_depth(UINT32 pid) {
+    for (UINTN i = 0; i < EVENT_MAX_PROCESSES; ++i) {
+        if (!g_queues[i].active || g_queues[i].pid != pid) {
+            continue;
+        }
+
+        return queue_depth(g_queues[i].head, g_queues[i].tail);
+    }
+
+    return 0;
 }
 
 UINT64 event_bus_channel_drop_count(void) {

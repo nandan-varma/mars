@@ -26,6 +26,8 @@ typedef struct {
 void scheduler_init(void);
 UINT32 scheduler_create_task(UINT32 owner_pid, const CHAR16 *name, UINT8 priority, task_entry_t entry, void *context);
 void scheduler_stop_task(UINT32 task_id);
+void scheduler_set_timer_preemptive(BOOLEAN enabled);
+BOOLEAN scheduler_timer_preemptive(void);
 void scheduler_run(void);
 void scheduler_step(void);
 UINTN scheduler_task_count(void);

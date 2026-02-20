@@ -4,15 +4,25 @@ static diag_record_t g_records[DIAG_MAX_RECORDS];
 static UINTN g_head;
 static UINTN g_count;
 static UINT64 g_tick;
+static UINT32 g_stage;
 
 void diag_init(void) {
     g_head = 0;
     g_count = 0;
     g_tick = 0;
+    g_stage = 0;
 }
 
 void diag_set_tick(UINT64 tick) {
     g_tick = tick;
+}
+
+void diag_set_stage(UINT32 stage) {
+    g_stage = stage;
+}
+
+UINT32 diag_stage(void) {
+    return g_stage;
 }
 
 void diag_log(UINT32 domain, UINT32 code, UINT64 a, UINT64 b) {

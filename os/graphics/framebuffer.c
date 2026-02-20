@@ -90,6 +90,36 @@ void framebuffer_present(void) {
     }
 }
 
+void framebuffer_present_region(INT32 x, INT32 y, INT32 width, INT32 height) {
+    if (g_backbuffer == NULL || g_frontbuffer == NULL || width <= 0 || height <= 0) {
+        return;
+    }
+
+    INT32 start_x = x < 0 ? 0 : x;
+    INT32 start_y = y < 0 ? 0 : y;
+    INT32 end_x = x + width;
+    INT32 end_y = y + height;
+
+    if (end_x > (INT32)g_framebuffer.width) {
+        end_x = (INT32)g_framebuffer.width;
+    }
+    if (end_y > (INT32)g_framebuffer.height) {
+        end_y = (INT32)g_framebuffer.height;
+    }
+
+    if (start_x >= end_x || start_y >= end_y) {
+        return;
+    }
+
+    for (INT32 py = start_y; py < end_y; ++py) {
+        UINTN src_row = (UINTN)py * g_framebuffer.width;
+        UINTN dst_row = (UINTN)py * g_framebuffer.pitch;
+        for (INT32 px = start_x; px < end_x; ++px) {
+            g_frontbuffer[dst_row + (UINTN)px] = g_backbuffer[src_row + (UINTN)px];
+        }
+    }
+}
+
 void drawChar(INT32 x, INT32 y, CHAR16 c, UINT32 fg, UINT32 bg) {
     const UINT8 *glyph = font8x16_get(c);
 

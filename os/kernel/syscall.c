@@ -31,13 +31,31 @@ static UINT64 syscall_send_event_handler(UINT64 packet_ptr, UINT64 b, UINT64 c, 
         return 1;
     }
 
+    if ((packet_ptr & (sizeof(UINTN) - 1)) != 0) {
+        return 4;
+    }
+
+    if (packet->channel >= EVENT_CHANNEL_COUNT || packet->payload_size > EVENT_PAYLOAD_BYTES) {
+        return 5;
+    }
+
     UINT32 pid = process_current_pid();
+    if (pid == 0) {
+        return 6;
+    }
+
+    if (packet->source_pid != 0 && packet->source_pid != pid) {
+        return 7;
+    }
+
     UINT32 caps = process_capabilities(pid);
     if ((caps & CAP_SYSTEM) == 0 && packet->channel == EVENT_CHANNEL_SYSTEM) {
         return 2;
     }
 
-    return event_bus_publish(packet) ? 0 : 3;
+    event_packet_t sanitized = *packet;
+    sanitized.source_pid = pid;
+    return event_bus_publish(&sanitized) ? 0 : 3;
 }
 
 static UINT64 syscall_get_ticks_handler(UINT64 a, UINT64 b, UINT64 c, UINT64 d) {

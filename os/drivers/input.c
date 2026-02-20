@@ -3,6 +3,13 @@
 #include "keyboard_uefi.h"
 #include "mouse_uefi.h"
 
+static input_lifecycle_state_t g_state = INPUT_LIFECYCLE_UNINITIALIZED;
+static UINT64 g_poll_count;
+static UINT64 g_published_count;
+static UINT64 g_drop_count;
+static UINT64 g_keyboard_poll_count;
+static UINT64 g_mouse_poll_count;
+
 static BOOLEAN publish_input_event(const input_event_t *event) {
     if (event == NULL) {
         return FALSE;
@@ -30,9 +37,18 @@ static BOOLEAN publish_input_event(const input_event_t *event) {
 }
 
 void input_init(const platform_context_t *platform, UINT32 screen_w, UINT32 screen_h) {
+    g_poll_count = 0;
+    g_published_count = 0;
+    g_drop_count = 0;
+    g_keyboard_poll_count = 0;
+    g_mouse_poll_count = 0;
+
     if (platform == NULL) {
+        g_state = INPUT_LIFECYCLE_UNINITIALIZED;
         return;
     }
+
+    g_state = INPUT_LIFECYCLE_PROBED;
 
     keyboard_driver_init(platform->input.text_input_ex);
     mouse_driver_init(
@@ -42,18 +58,42 @@ void input_init(const platform_context_t *platform, UINT32 screen_w, UINT32 scre
         screen_w,
         screen_h
     );
+
+    g_state = INPUT_LIFECYCLE_STARTED;
+}
+
+void input_stop(void) {
+    if (g_state == INPUT_LIFECYCLE_STARTED) {
+        g_state = INPUT_LIFECYCLE_STOPPED;
+    }
 }
 
 void input_poll(void) {
+    if (g_state != INPUT_LIFECYCLE_STARTED) {
+        return;
+    }
+
+    ++g_poll_count;
+
     input_event_t event;
+    ++g_keyboard_poll_count;
     if (keyboard_driver_poll(&event)) {
-        (void)publish_input_event(&event);
+        if (publish_input_event(&event)) {
+            ++g_published_count;
+        } else {
+            ++g_drop_count;
+        }
     }
 
     input_event_t mouse_events[3];
+    ++g_mouse_poll_count;
     UINTN count = mouse_driver_poll(mouse_events, 3);
     for (UINTN i = 0; i < count; ++i) {
-        (void)publish_input_event(&mouse_events[i]);
+        if (publish_input_event(&mouse_events[i])) {
+            ++g_published_count;
+        } else {
+            ++g_drop_count;
+        }
     }
 }
 
@@ -103,4 +143,28 @@ BOOLEAN input_has_absolute_mouse(void) {
 
 BOOLEAN input_has_ps2_mouse(void) {
     return mouse_driver_has_ps2();
+}
+
+input_lifecycle_state_t input_lifecycle_state(void) {
+    return g_state;
+}
+
+UINT64 input_poll_count(void) {
+    return g_poll_count;
+}
+
+UINT64 input_published_count(void) {
+    return g_published_count;
+}
+
+UINT64 input_drop_count(void) {
+    return g_drop_count;
+}
+
+UINT64 input_keyboard_poll_count(void) {
+    return g_keyboard_poll_count;
+}
+
+UINT64 input_mouse_poll_count(void) {
+    return g_mouse_poll_count;
 }

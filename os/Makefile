@@ -30,6 +30,8 @@ OBJCOPY := $(DETECTED_OBJCOPY)
 endif
 
 QEMU ?= qemu-system-x86_64
+HOST_CC ?= cc
+HOST_CFLAGS ?= -O2 -Wall -Wextra
 QEMU_INPUT_DEVICES ?=
 QEMU_DISPLAY ?= cocoa
 OVMF_CODE ?= $(or \
@@ -112,7 +114,13 @@ SRCS := \
 
 OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS))
 
-.PHONY: all clean run debug esp run-gui run-fs run-apps user-apps disk-image
+.PHONY: all clean run debug esp run-gui run-fs run-apps user-apps disk-image test-host
+
+HOST_TEST_BINS := \
+	$(BUILD_DIR)/tests/test_event_bus_contract \
+	$(BUILD_DIR)/tests/test_scheduler_fairness \
+	$(BUILD_DIR)/tests/test_process_slot_reuse \
+	$(BUILD_DIR)/tests/test_input_bounds
 
 all: $(TARGET_EFI) user-apps disk-image
 
@@ -207,3 +215,25 @@ debug: all
 
 clean:
 	rm -rf $(BUILD_DIR) $(TARGET_EFI)
+
+$(BUILD_DIR)/tests/test_event_bus_contract: tests/test_event_bus_contract.c kernel/event_bus.c
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
+
+$(BUILD_DIR)/tests/test_scheduler_fairness: tests/test_scheduler_fairness.c kernel/scheduler.c
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
+
+$(BUILD_DIR)/tests/test_process_slot_reuse: tests/test_process_slot_reuse.c kernel/process.c
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
+
+$(BUILD_DIR)/tests/test_input_bounds: tests/test_input_bounds.c drivers/input.c
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
+
+test-host: $(HOST_TEST_BINS)
+	@for t in $(HOST_TEST_BINS); do \
+		echo "[test] $$t"; \
+		$$t || exit 1; \
+	done

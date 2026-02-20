@@ -16,6 +16,10 @@
 #include "vm.h"
 #include "wm.h"
 
+#ifndef SCHED_TIMER_PREEMPTIVE
+#define SCHED_TIMER_PREEMPTIVE 0
+#endif
+
 static void on_timer_interrupt(UINTN vector, UINT64 a, UINT64 b, UINT64 c) {
     (void)vector;
     (void)a;
@@ -112,23 +116,39 @@ void kernel_main(const boot_info_t *boot_info) {
     }
 
     diag_init();
+    diag_set_stage(10);
     interrupts_init();
+    diag_set_stage(20);
     event_bus_init();
+    (void)event_bus_set_channel_policy(EVENT_CHANNEL_INPUT, EVENT_BACKPRESSURE_DROP_OLDEST);
+    (void)event_bus_set_channel_policy(EVENT_CHANNEL_INPUT_KEYBOARD, EVENT_BACKPRESSURE_DROP_OLDEST);
+    (void)event_bus_set_channel_policy(EVENT_CHANNEL_SYSTEM, EVENT_BACKPRESSURE_DROP_NEWEST);
+    (void)event_bus_set_channel_policy(EVENT_CHANNEL_APP, EVENT_BACKPRESSURE_DROP_NEWEST);
+    diag_set_stage(30);
     timer_init(1000);
+    diag_set_stage(40);
     scheduler_init();
+    scheduler_set_timer_preemptive(SCHED_TIMER_PREEMPTIVE ? TRUE : FALSE);
     process_init();
+    diag_set_stage(50);
 
     memory_init(platform);
+    diag_set_stage(60);
     framebuffer_init(platform);
+    diag_set_stage(70);
     vm_init(platform);
+    diag_set_stage(80);
     heap_init(512);
+    diag_set_stage(90);
 
     syscall_init();
     (void)interrupts_register(IRQ_VECTOR_TIMER, on_timer_interrupt);
     (void)interrupts_register(IRQ_VECTOR_SYSCALL, on_syscall_interrupt);
 
     input_init(platform, platform->framebuffer.width, platform->framebuffer.height);
+    diag_set_stage(100);
     wm_init(platform->framebuffer.width, platform->framebuffer.height);
+    diag_set_stage(110);
 
     vfs_init();
     vfs_block_device_t boot_device;
@@ -136,6 +156,7 @@ void kernel_main(const boot_info_t *boot_info) {
     boot_device.block_count = 16384;
     boot_device.read_only = TRUE;
     vfs_mount_boot_device(boot_device);
+    diag_set_stage(120);
 
     for (UINTN i = 0; i < (sizeof(g_managed_processes) / sizeof(g_managed_processes[0])); ++i) {
         (void)spawn_managed_process(&g_managed_processes[i]);
@@ -146,6 +167,7 @@ void kernel_main(const boot_info_t *boot_info) {
 
     app_framework_init();
     app_launch_core_suite();
+    diag_set_stage(200);
 
     scheduler_run();
 }

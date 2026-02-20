@@ -11,6 +11,8 @@ static task_t g_tasks[MAX_TASKS];
 static UINTN g_task_count;
 static UINT32 g_next_task_id;
 static UINTN g_rr_index;
+static BOOLEAN g_timer_preemptive;
+static UINT64 g_last_task_tick;
 
 static void copy_name(CHAR16 *dst, const CHAR16 *src, UINTN max_chars) {
     if (max_chars == 0) {
@@ -34,6 +36,8 @@ void scheduler_init(void) {
     g_task_count = 0;
     g_next_task_id = 1;
     g_rr_index = 0;
+    g_timer_preemptive = FALSE;
+    g_last_task_tick = 0;
 }
 
 UINT32 scheduler_create_task(UINT32 owner_pid, const CHAR16 *name, UINT8 priority, task_entry_t entry, void *context) {
@@ -92,6 +96,14 @@ static void scheduler_dispatch_tick(void) {
     interrupts_dispatch(IRQ_VECTOR_TIMER, timer_ticks(), timer_hz(), 0);
 }
 
+void scheduler_set_timer_preemptive(BOOLEAN enabled) {
+    g_timer_preemptive = enabled;
+}
+
+BOOLEAN scheduler_timer_preemptive(void) {
+    return g_timer_preemptive;
+}
+
 void scheduler_step(void) {
     if (g_task_count == 0) {
         scheduler_dispatch_tick();
@@ -99,6 +111,14 @@ void scheduler_step(void) {
     }
 
     scheduler_dispatch_tick();
+
+    if (g_timer_preemptive) {
+        UINT64 tick = timer_ticks();
+        if (tick == g_last_task_tick) {
+            return;
+        }
+        g_last_task_tick = tick;
+    }
 
     UINTN start = g_rr_index;
     for (UINTN offset = 0; offset < g_task_count; ++offset) {

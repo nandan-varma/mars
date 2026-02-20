@@ -17,6 +17,7 @@ void drawPixel(INT32 x, INT32 y, UINT32 color);
 void drawRect(INT32 x, INT32 y, INT32 width, INT32 height, UINT32 color);
 void clearScreen(UINT32 color);
 void framebuffer_present(void);
+void framebuffer_present_region(INT32 x, INT32 y, INT32 width, INT32 height);
 
 void drawChar(INT32 x, INT32 y, CHAR16 c, UINT32 fg, UINT32 bg);
 void drawString(INT32 x, INT32 y, const CHAR16 *text, UINT32 fg, UINT32 bg);
