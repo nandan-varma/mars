@@ -1,82 +1,42 @@
 #include "input.h"
+#include "event_bus.h"
 #include "keyboard_uefi.h"
 #include "mouse_uefi.h"
 
-#define INPUT_QUEUE_CAPACITY 128
+static BOOLEAN publish_input_event(const input_event_t *event) {
+    if (event == NULL) {
+        return FALSE;
+    }
 
-static input_event_t g_queue[INPUT_QUEUE_CAPACITY];
-static UINTN g_head;
-static UINTN g_tail;
+    event_packet_t packet;
+    packet.channel = EVENT_CHANNEL_INPUT;
+    packet.code = EVENT_CODE_INPUT;
+    packet.source_pid = 0;
+    packet.target_pid = 0;
+    packet.target_window = 0;
+    packet.payload_size = sizeof(input_event_t);
 
-static BOOLEAN queue_is_full(void) {
-    return ((g_tail + 1) % INPUT_QUEUE_CAPACITY) == g_head;
+    const UINT8 *src = (const UINT8 *)event;
+    for (UINTN i = 0; i < sizeof(input_event_t); ++i) {
+        packet.payload[i] = src[i];
+    }
+    for (UINTN i = sizeof(input_event_t); i < EVENT_PAYLOAD_BYTES; ++i) {
+        packet.payload[i] = 0;
+    }
+
+    return event_bus_publish(&packet);
 }
 
-static BOOLEAN queue_is_empty(void) {
-    return g_head == g_tail;
-}
-
-static void queue_push(const input_event_t *event) {
-    if (queue_is_full()) {
+void input_init(const platform_context_t *platform, UINT32 screen_w, UINT32 screen_h) {
+    if (platform == NULL) {
         return;
     }
 
-    g_queue[g_tail] = *event;
-    g_tail = (g_tail + 1) % INPUT_QUEUE_CAPACITY;
-}
-
-static void queue_mouse_move(INT32 dx, INT32 dy) {
-    mouse_driver_inject_move(dx, dy);
-
-    input_event_t move_event;
-    move_event.type = INPUT_EVENT_MOUSE_MOVE;
-    move_event.data.mouse_move.dx = dx;
-    move_event.data.mouse_move.dy = dy;
-    move_event.data.mouse_move.x = mouse_driver_x();
-    move_event.data.mouse_move.y = mouse_driver_y();
-    queue_push(&move_event);
-}
-
-static void queue_left_button(BOOLEAN down) {
-    if (!mouse_driver_set_left(down)) {
-        return;
-    }
-
-    input_event_t button_event;
-    button_event.type = down ? INPUT_EVENT_MOUSE_BUTTON_DOWN : INPUT_EVENT_MOUSE_BUTTON_UP;
-    button_event.data.mouse_button.left = down;
-    button_event.data.mouse_button.right = FALSE;
-    queue_push(&button_event);
-}
-
-static void synthesize_mouse_from_key(const input_event_t *key_event) {
-    const UINT16 scan = key_event->data.key.scan_code;
-    const CHAR16 unicode = key_event->data.key.unicode;
-    const INT32 step = 12;
-
-    if (scan == SCAN_LEFT) {
-        queue_mouse_move(-step, 0);
-    } else if (scan == SCAN_RIGHT) {
-        queue_mouse_move(step, 0);
-    } else if (scan == SCAN_UP) {
-        queue_mouse_move(0, -step);
-    } else if (scan == SCAN_DOWN) {
-        queue_mouse_move(0, step);
-    } else if (unicode == L' ' || unicode == L'\r') {
-        queue_left_button(TRUE);
-        queue_left_button(FALSE);
-    }
-}
-
-void input_init(const boot_info_t *boot_info, UINT32 screen_w, UINT32 screen_h) {
-    g_head = 0;
-    g_tail = 0;
-
-    keyboard_driver_init(boot_info->text_input_ex);
+    keyboard_driver_init(platform->input.text_input_ex);
     mouse_driver_init(
-        boot_info->boot_services,
-        boot_info->simple_pointer,
-        boot_info->absolute_pointer,
+        NULL,
+        platform->input.simple_pointer,
+        platform->input.absolute_pointer,
         screen_w,
         screen_h
     );
@@ -85,24 +45,35 @@ void input_init(const boot_info_t *boot_info, UINT32 screen_w, UINT32 screen_h) 
 void input_poll(void) {
     input_event_t event;
     if (keyboard_driver_poll(&event)) {
-        queue_push(&event);
-        synthesize_mouse_from_key(&event);
+        (void)publish_input_event(&event);
     }
 
     input_event_t mouse_events[3];
     UINTN count = mouse_driver_poll(mouse_events, 3);
     for (UINTN i = 0; i < count; ++i) {
-        queue_push(&mouse_events[i]);
+        (void)publish_input_event(&mouse_events[i]);
     }
 }
 
 BOOLEAN input_pop_event(input_event_t *out_event) {
-    if (out_event == NULL || queue_is_empty()) {
+    if (out_event == NULL) {
         return FALSE;
     }
 
-    *out_event = g_queue[g_head];
-    g_head = (g_head + 1) % INPUT_QUEUE_CAPACITY;
+    event_packet_t packet;
+    if (!event_bus_receive_channel(EVENT_CHANNEL_INPUT, &packet)) {
+        return FALSE;
+    }
+
+    if (packet.code != EVENT_CODE_INPUT || packet.payload_size < sizeof(input_event_t)) {
+        return FALSE;
+    }
+
+    UINT8 *dst = (UINT8 *)out_event;
+    for (UINTN i = 0; i < sizeof(input_event_t); ++i) {
+        dst[i] = packet.payload[i];
+    }
+
     return TRUE;
 }
 

@@ -31,6 +31,7 @@ endif
 
 QEMU ?= qemu-system-x86_64
 QEMU_INPUT_DEVICES ?=
+QEMU_DISPLAY ?= cocoa
 OVMF_CODE ?= $(or \
 	$(shell [ -f /opt/homebrew/share/edk2/ovmf/OVMF_CODE.fd ] && echo /opt/homebrew/share/edk2/ovmf/OVMF_CODE.fd), \
 	$(shell ls -1 /opt/homebrew/Cellar/qemu/*/share/qemu/edk2-x86_64-code.fd 2>/dev/null | tail -n 1))
@@ -40,6 +41,8 @@ BUILD_DIR := build
 ESP_DIR := esp
 EFI_BOOT_DIR := $(ESP_DIR)/EFI/BOOT
 TARGET_EFI := $(EFI_BOOT_DIR)/BOOTX64.EFI
+APPS_DIR := $(BUILD_DIR)/apps
+DISK_IMAGE := $(BUILD_DIR)/mars.img
 
 USE_MINGW ?= 0
 ifneq ($(strip $(DETECTED_MINGW_CC)),)
@@ -87,19 +90,31 @@ SRCS := \
 	kernel/kernel.c \
 	kernel/timer.c \
 	kernel/memory.c \
+	kernel/vm.c \
+	kernel/platform.c \
+	kernel/diag.c \
+	kernel/panic.c \
+	kernel/interrupts.c \
+	kernel/heap.c \
+	kernel/event_bus.c \
+	kernel/scheduler.c \
+	kernel/process.c \
+	kernel/syscall.c \
+	kernel/app.c \
+	kernel/vfs.c \
 	drivers/input.c \
 	drivers/keyboard_uefi.c \
 	drivers/mouse_uefi.c \
 	graphics/framebuffer.c \
 	graphics/font8x16.c \
-	gui/gui.c \
+	gui/wm.c \
 	lib/string.c
 
 OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS))
 
-.PHONY: all clean run debug esp
+.PHONY: all clean run debug esp run-gui run-fs run-apps user-apps disk-image
 
-all: $(TARGET_EFI)
+all: $(TARGET_EFI) user-apps disk-image
 
 $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
@@ -122,6 +137,18 @@ endif
 
 esp: $(TARGET_EFI)
 
+user-apps:
+	@mkdir -p $(APPS_DIR)
+	@printf "name=shell\n" > $(APPS_DIR)/shell.app
+	@printf "name=files\n" > $(APPS_DIR)/files.app
+	@printf "name=term\n" > $(APPS_DIR)/term.app
+	@printf "name=settings\n" > $(APPS_DIR)/settings.app
+	@printf "name=tasks\n" > $(APPS_DIR)/tasks.app
+
+disk-image:
+	@mkdir -p $(BUILD_DIR)
+	@dd if=/dev/zero of=$(DISK_IMAGE) bs=1m count=64 2>/dev/null
+
 run: all
 	@if [ -z "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_CODE)" ]; then \
 		echo "Missing OVMF code firmware. Set OVMF_CODE=/path/to/edk2-x86_64-code.fd"; \
@@ -130,6 +157,7 @@ run: all
 	@if [ -f "$(OVMF_VARS)" ]; then \
 		$(QEMU) \
 			-machine pc -m 512M \
+			-display $(QEMU_DISPLAY) \
 			$(QEMU_INPUT_DEVICES) \
 			-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
 			-drive if=pflash,format=raw,file=$(OVMF_VARS) \
@@ -139,11 +167,18 @@ run: all
 		echo "OVMF_VARS not found; running without vars pflash."; \
 		$(QEMU) \
 			-machine pc -m 512M \
+			-display $(QEMU_DISPLAY) \
 			$(QEMU_INPUT_DEVICES) \
 			-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
 			-drive format=raw,file=fat:rw:$(ESP_DIR) \
 			-serial stdio; \
 	fi
+
+run-gui: run
+
+run-fs: run
+
+run-apps: run
 
 debug: all
 	@if [ -z "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_CODE)" ]; then \
@@ -153,6 +188,7 @@ debug: all
 	@if [ -f "$(OVMF_VARS)" ]; then \
 		$(QEMU) \
 			-machine pc -m 512M \
+			-display $(QEMU_DISPLAY) \
 			$(QEMU_INPUT_DEVICES) \
 			-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
 			-drive if=pflash,format=raw,file=$(OVMF_VARS) \
@@ -162,6 +198,7 @@ debug: all
 		echo "OVMF_VARS not found; running debug without vars pflash."; \
 		$(QEMU) \
 			-machine pc -m 512M \
+			-display $(QEMU_DISPLAY) \
 			$(QEMU_INPUT_DEVICES) \
 			-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
 			-drive format=raw,file=fat:rw:$(ESP_DIR) \

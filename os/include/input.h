@@ -2,7 +2,7 @@
 #define INPUT_H
 
 #include "uefi.h"
-#include "boot_info.h"
+#include "platform.h"
 
 typedef enum {
     INPUT_EVENT_KEY_DOWN = 0,
@@ -31,7 +31,7 @@ typedef struct {
     } data;
 } input_event_t;
 
-void input_init(const boot_info_t *boot_info, UINT32 screen_w, UINT32 screen_h);
+void input_init(const platform_context_t *platform, UINT32 screen_w, UINT32 screen_h);
 void input_poll(void);
 BOOLEAN input_pop_event(input_event_t *out_event);
 

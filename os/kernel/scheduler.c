@@ -1,0 +1,102 @@
+#include "scheduler.h"
+
+#include "diag.h"
+#include "interrupts.h"
+#include "process.h"
+#include "timer.h"
+
+#define MAX_TASKS 64
+
+static task_t g_tasks[MAX_TASKS];
+static UINTN g_task_count;
+static UINT32 g_next_task_id;
+static UINTN g_rr_index;
+
+static void copy_name(CHAR16 *dst, const CHAR16 *src, UINTN max_chars) {
+    if (max_chars == 0) {
+        return;
+    }
+
+    if (src == NULL) {
+        dst[0] = 0;
+        return;
+    }
+
+    UINTN i = 0;
+    while (i + 1 < max_chars && src[i] != 0) {
+        dst[i] = src[i];
+        ++i;
+    }
+    dst[i] = 0;
+}
+
+void scheduler_init(void) {
+    g_task_count = 0;
+    g_next_task_id = 1;
+    g_rr_index = 0;
+}
+
+UINT32 scheduler_create_task(UINT32 owner_pid, const CHAR16 *name, UINT8 priority, task_entry_t entry, void *context) {
+    if (g_task_count >= MAX_TASKS || entry == NULL) {
+        return 0;
+    }
+
+    task_t *task = &g_tasks[g_task_count++];
+    task->id = g_next_task_id++;
+    task->owner_pid = owner_pid;
+    task->priority = priority;
+    task->state = TASK_READY;
+    task->runtime_ticks = 0;
+    task->entry = entry;
+    task->context = context;
+    copy_name(task->name, name, 24);
+    return task->id;
+}
+
+static void scheduler_dispatch_tick(void) {
+    timer_poll();
+    diag_set_tick(timer_ticks());
+    interrupts_dispatch(IRQ_VECTOR_TIMER, timer_ticks(), timer_hz(), 0);
+}
+
+void scheduler_step(void) {
+    if (g_task_count == 0) {
+        scheduler_dispatch_tick();
+        return;
+    }
+
+    scheduler_dispatch_tick();
+
+    UINTN start = g_rr_index;
+    for (UINTN offset = 0; offset < g_task_count; ++offset) {
+        UINTN index = (start + offset) % g_task_count;
+        task_t *task = &g_tasks[index];
+        if (task->owner_pid != 0 && !process_is_running(task->owner_pid)) {
+            task->state = TASK_STOPPED;
+            continue;
+        }
+
+        if (task->state != TASK_READY && task->state != TASK_RUNNING) {
+            continue;
+        }
+
+        task->state = TASK_RUNNING;
+        process_set_current_pid(task->owner_pid);
+        BOOLEAN keep_running = task->entry(task->context);
+        process_set_current_pid(0);
+        task->runtime_ticks += 1;
+        task->state = keep_running ? TASK_READY : TASK_STOPPED;
+        g_rr_index = (index + 1) % g_task_count;
+        break;
+    }
+}
+
+void scheduler_run(void) {
+    for (;;) {
+        scheduler_step();
+    }
+}
+
+UINTN scheduler_task_count(void) {
+    return g_task_count;
+}

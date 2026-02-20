@@ -1,67 +1,105 @@
 #include "kernel.h"
+#include "app.h"
+#include "diag.h"
+#include "event_bus.h"
 #include "framebuffer.h"
+#include "heap.h"
 #include "input.h"
-#include "gui.h"
-#include "timer.h"
+#include "interrupts.h"
 #include "memory.h"
+#include "platform.h"
+#include "process.h"
+#include "scheduler.h"
+#include "syscall.h"
+#include "timer.h"
+#include "vfs.h"
+#include "vm.h"
+#include "wm.h"
+
+static void on_timer_interrupt(UINTN vector, UINT64 a, UINT64 b, UINT64 c) {
+    (void)vector;
+    (void)b;
+    (void)c;
+
+    event_packet_t packet;
+    packet.channel = EVENT_CHANNEL_SYSTEM;
+    packet.code = EVENT_CODE_TIMER_TICK;
+    packet.source_pid = 0;
+    packet.target_pid = 0;
+    packet.target_window = 0;
+    packet.payload_size = sizeof(UINT64);
+    UINT8 *bytes = (UINT8 *)&a;
+    for (UINTN i = 0; i < sizeof(UINT64); ++i) {
+        packet.payload[i] = bytes[i];
+    }
+    for (UINTN i = sizeof(UINT64); i < EVENT_PAYLOAD_BYTES; ++i) {
+        packet.payload[i] = 0;
+    }
+    (void)event_bus_publish(&packet);
+}
+
+static void on_syscall_interrupt(UINTN vector, UINT64 a, UINT64 b, UINT64 c) {
+    (void)vector;
+    (void)b;
+    (void)c;
+    diag_log(0x200U, (UINT32)a, process_current_pid(), timer_ticks());
+}
+
+static BOOLEAN desktop_task(void *context) {
+    (void)context;
+
+    input_poll();
+    wm_dispatch_input();
+
+    if (wm_needs_redraw()) {
+        wm_render();
+    }
+
+    return TRUE;
+}
 
 void kernel_main(const boot_info_t *boot_info) {
-    framebuffer_init(boot_info);
-    clearScreen(0x00101820);
-    drawString(24, 24, L"MarsOS: UEFI kernel online", 0x00FFFFFF, 0x00101820);
-
-    input_init(boot_info, boot_info->width, boot_info->height);
-    gui_init(boot_info);
-    timer_init(boot_info);
-
-    memory_init(boot_info);
-
-    EFI_PHYSICAL_ADDRESS warmup_page = memory_alloc_pages(1);
-    (void)warmup_page;
-
-    gui_update();
-    gui_render();
-    framebuffer_present();
-
-    INT32 last_mouse_x = input_mouse_x();
-    INT32 last_mouse_y = input_mouse_y();
-    BOOLEAN last_left = input_left_down();
-    UINTN idle_frames = 0;
-    for (;;) {
-        input_poll();
-
-        BOOLEAN had_event = FALSE;
-        input_event_t event;
-        while (input_pop_event(&event)) {
-            had_event = TRUE;
-            gui_handle_event(&event);
-        }
-
-        INT32 mouse_x = input_mouse_x();
-        INT32 mouse_y = input_mouse_y();
-        BOOLEAN left_now = input_left_down();
-
-        BOOLEAN pointer_changed = (mouse_x != last_mouse_x) || (mouse_y != last_mouse_y) || (left_now != last_left);
-        if (pointer_changed) {
-            last_mouse_x = mouse_x;
-            last_mouse_y = mouse_y;
-            last_left = left_now;
-        }
-
-        if (had_event || pointer_changed) {
-            idle_frames = 0;
-        } else {
-            ++idle_frames;
-        }
-
-        BOOLEAN should_render = had_event || pointer_changed || idle_frames >= 30;
-        if (should_render) {
-            gui_update();
-            gui_render();
-            framebuffer_present();
-            idle_frames = 0;
-        }
-
-        timer_frame_wait(60);
+    if (boot_info == NULL) {
+        return;
     }
+
+    platform_init_from_boot(boot_info);
+    const platform_context_t *platform = platform_context();
+    if (platform == NULL) {
+        return;
+    }
+
+    diag_init();
+    interrupts_init();
+    event_bus_init();
+    timer_init(1000);
+    scheduler_init();
+    process_init();
+
+    memory_init(platform);
+    framebuffer_init(platform);
+    vm_init(platform);
+    heap_init(512);
+
+    syscall_init();
+    (void)interrupts_register(IRQ_VECTOR_TIMER, on_timer_interrupt);
+    (void)interrupts_register(IRQ_VECTOR_SYSCALL, on_syscall_interrupt);
+
+    input_init(platform, platform->framebuffer.width, platform->framebuffer.height);
+    wm_init(platform->framebuffer.width, platform->framebuffer.height);
+
+    vfs_init();
+    vfs_block_device_t boot_device;
+    boot_device.block_size = 512;
+    boot_device.block_count = 16384;
+    boot_device.read_only = TRUE;
+    vfs_mount_boot_device(boot_device);
+
+    UINT32 desktop_pid = process_create_kernel(L"desktop-shell", desktop_task, NULL, 1, CAP_SYSTEM | CAP_INPUT | CAP_GRAPHICS);
+    (void)desktop_pid;
+
+    app_framework_init();
+    app_launch_core_suite();
+
+    scheduler_run();
 }

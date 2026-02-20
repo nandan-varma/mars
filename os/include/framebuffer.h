@@ -2,7 +2,7 @@
 #define FRAMEBUFFER_H
 
 #include "uefi.h"
-#include "boot_info.h"
+#include "platform.h"
 
 typedef struct {
     UINT32 *base;
@@ -11,7 +11,7 @@ typedef struct {
     UINT32 pitch;
 } framebuffer_t;
 
-void framebuffer_init(const boot_info_t *boot_info);
+void framebuffer_init(const platform_context_t *platform);
 
 void drawPixel(INT32 x, INT32 y, UINT32 color);
 void drawRect(INT32 x, INT32 y, INT32 width, INT32 height, UINT32 color);

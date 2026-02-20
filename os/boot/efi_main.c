@@ -255,19 +255,19 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     }
 
     boot_info_t boot_info;
-    boot_info.framebuffer_base = gop->Mode->FrameBufferBase;
-    boot_info.framebuffer_size = gop->Mode->FrameBufferSize;
-    boot_info.width = gop->Mode->Info->HorizontalResolution;
-    boot_info.height = gop->Mode->Info->VerticalResolution;
-    boot_info.pixels_per_scanline = gop->Mode->Info->PixelsPerScanLine;
-    boot_info.boot_services = bs;
-    boot_info.memory_map = memory_map;
-    boot_info.memory_map_size = memory_map_size;
-    boot_info.memory_descriptor_size = descriptor_size;
-    boot_info.memory_descriptor_version = descriptor_version;
-    boot_info.text_input_ex = text_input_ex;
-    boot_info.simple_pointer = simple_pointer;
-    boot_info.absolute_pointer = absolute_pointer;
+    boot_info.framebuffer.base = gop->Mode->FrameBufferBase;
+    boot_info.framebuffer.size = gop->Mode->FrameBufferSize;
+    boot_info.framebuffer.width = gop->Mode->Info->HorizontalResolution;
+    boot_info.framebuffer.height = gop->Mode->Info->VerticalResolution;
+    boot_info.framebuffer.pixels_per_scanline = gop->Mode->Info->PixelsPerScanLine;
+    boot_info.bootstrap.boot_services = bs;
+    boot_info.memory_map.map = memory_map;
+    boot_info.memory_map.size = memory_map_size;
+    boot_info.memory_map.descriptor_size = descriptor_size;
+    boot_info.memory_map.descriptor_version = descriptor_version;
+    boot_info.input.text_input_ex = text_input_ex;
+    boot_info.input.simple_pointer = simple_pointer;
+    boot_info.input.absolute_pointer = absolute_pointer;
 
     status = maybe_exit_boot_services(image_handle, system_table);
     if (EFI_ERROR(status)) {
@@ -275,14 +275,14 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     }
 
 #if EXIT_BOOT_SERVICES
-    boot_info.boot_services = NULL;
-    boot_info.memory_map = NULL;
-    boot_info.memory_map_size = 0;
-    boot_info.memory_descriptor_size = 0;
-    boot_info.memory_descriptor_version = 0;
-    boot_info.text_input_ex = NULL;
-    boot_info.simple_pointer = NULL;
-    boot_info.absolute_pointer = NULL;
+    boot_info.bootstrap.boot_services = NULL;
+    boot_info.memory_map.map = NULL;
+    boot_info.memory_map.size = 0;
+    boot_info.memory_map.descriptor_size = 0;
+    boot_info.memory_map.descriptor_version = 0;
+    boot_info.input.text_input_ex = NULL;
+    boot_info.input.simple_pointer = NULL;
+    boot_info.input.absolute_pointer = NULL;
 #endif
 
     kernel_main(&boot_info);

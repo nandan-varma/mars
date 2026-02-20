@@ -1,6 +1,7 @@
 #include "memory.h"
 
 #define PAGE_SIZE 4096
+#define MAX_PAGE_REGIONS 128
 
 typedef struct {
     EFI_PHYSICAL_ADDRESS base;
@@ -8,53 +9,61 @@ typedef struct {
     UINTN used;
 } page_region_t;
 
-static page_region_t g_region;
+static page_region_t g_regions[MAX_PAGE_REGIONS];
+static UINTN g_region_count;
 static UINTN g_total_pages;
 
-static EFI_MEMORY_DESCRIPTOR *nth_descriptor(const boot_info_t *boot_info, UINTN index) {
-    return (EFI_MEMORY_DESCRIPTOR *)((UINT8 *)boot_info->memory_map + index * boot_info->memory_descriptor_size);
+static EFI_MEMORY_DESCRIPTOR *nth_descriptor(const platform_context_t *platform, UINTN index) {
+    return (EFI_MEMORY_DESCRIPTOR *)((UINT8 *)platform->memory_map.map + index * platform->memory_map.descriptor_size);
 }
 
-void memory_init(const boot_info_t *boot_info) {
-    g_region.base = 0;
-    g_region.pages = 0;
-    g_region.used = 0;
+void memory_init(const platform_context_t *platform) {
+    g_region_count = 0;
     g_total_pages = 0;
 
-    if (boot_info == NULL || boot_info->memory_map == NULL || boot_info->memory_descriptor_size == 0) {
+    if (platform == NULL || platform->memory_map.map == NULL || platform->memory_map.descriptor_size == 0) {
         return;
     }
 
-    UINTN descriptor_count = boot_info->memory_map_size / boot_info->memory_descriptor_size;
+    UINTN descriptor_count = platform->memory_map.size / platform->memory_map.descriptor_size;
 
     for (UINTN i = 0; i < descriptor_count; ++i) {
-        EFI_MEMORY_DESCRIPTOR *desc = nth_descriptor(boot_info, i);
+        EFI_MEMORY_DESCRIPTOR *desc = nth_descriptor(platform, i);
         if (desc->Type != EfiConventionalMemory) {
             continue;
         }
 
-        g_total_pages += (UINTN)desc->NumberOfPages;
+        UINTN pages = (UINTN)desc->NumberOfPages;
+        if (pages == 0) {
+            continue;
+        }
 
-        if ((UINTN)desc->NumberOfPages > g_region.pages) {
-            g_region.base = desc->PhysicalStart;
-            g_region.pages = (UINTN)desc->NumberOfPages;
-            g_region.used = 0;
+        if (g_region_count < MAX_PAGE_REGIONS) {
+            g_regions[g_region_count].base = desc->PhysicalStart;
+            g_regions[g_region_count].pages = pages;
+            g_regions[g_region_count].used = 0;
+            g_total_pages += pages;
+            ++g_region_count;
         }
     }
 }
 
 EFI_PHYSICAL_ADDRESS memory_alloc_pages(UINTN page_count) {
-    if (page_count == 0 || g_region.pages == 0) {
+    if (page_count == 0 || g_region_count == 0) {
         return 0;
     }
 
-    if (g_region.used + page_count > g_region.pages) {
-        return 0;
+    for (UINTN i = 0; i < g_region_count; ++i) {
+        if (page_count > (g_regions[i].pages - g_regions[i].used)) {
+            continue;
+        }
+
+        EFI_PHYSICAL_ADDRESS address = g_regions[i].base + (EFI_PHYSICAL_ADDRESS)(g_regions[i].used * PAGE_SIZE);
+        g_regions[i].used += page_count;
+        return address;
     }
 
-    EFI_PHYSICAL_ADDRESS address = g_region.base + (EFI_PHYSICAL_ADDRESS)(g_region.used * PAGE_SIZE);
-    g_region.used += page_count;
-    return address;
+    return 0;
 }
 
 UINTN memory_total_pages(void) {
@@ -62,9 +71,15 @@ UINTN memory_total_pages(void) {
 }
 
 UINTN memory_free_pages(void) {
-    if (g_region.pages < g_region.used) {
-        return 0;
+    UINTN free_pages = 0;
+
+    for (UINTN i = 0; i < g_region_count; ++i) {
+        if (g_regions[i].used > g_regions[i].pages) {
+            continue;
+        }
+
+        free_pages += g_regions[i].pages - g_regions[i].used;
     }
 
-    return g_region.pages - g_region.used;
+    return free_pages;
 }
