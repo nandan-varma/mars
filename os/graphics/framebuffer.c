@@ -103,10 +103,16 @@ void drawChar(INT32 x, INT32 y, CHAR16 c, UINT32 fg, UINT32 bg) {
 }
 
 void drawString(INT32 x, INT32 y, const CHAR16 *text, UINT32 fg, UINT32 bg) {
+    if (text == NULL) {
+        return;
+    }
+
     INT32 cursor_x = x;
     INT32 cursor_y = y;
+    UINTN guard = 0;
+    UINTN max_chars = 2048;
 
-    for (UINTN index = 0; text[index] != 0; ++index) {
+    for (UINTN index = 0; text[index] != 0 && guard < max_chars; ++index, ++guard) {
         CHAR16 ch = text[index];
 
         if (ch == L'\n') {

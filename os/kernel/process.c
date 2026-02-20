@@ -90,6 +90,17 @@ UINTN process_count(void) {
     return g_process_count;
 }
 
+UINTN process_running_count(void) {
+    UINTN count = 0;
+    for (UINTN i = 0; i < g_process_count; ++i) {
+        if (g_processes[i].state == PROCESS_RUNNING || g_processes[i].state == PROCESS_WAITING) {
+            ++count;
+        }
+    }
+
+    return count;
+}
+
 BOOLEAN process_is_running(UINT32 pid) {
     process_t *process = find_process(pid);
     if (process == NULL) {

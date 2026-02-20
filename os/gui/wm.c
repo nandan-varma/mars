@@ -3,16 +3,21 @@
 #include "app.h"
 #include "event_bus.h"
 #include "framebuffer.h"
+#include "heap.h"
 #include "input.h"
 #include "os_string.h"
 #include "process.h"
+#include "scheduler.h"
+#include "timer.h"
 
 #define WM_MAX_WINDOWS 16
 #define START_BUTTON_W 72
 #define START_BUTTON_H 20
 #define START_MENU_W 220
 #define START_MENU_ITEM_H 24
-#define START_MENU_ITEM_COUNT 5
+#define START_MENU_ITEM_COUNT 6
+#define WM_POINTER_EVENTS_PER_STEP 16
+#define WM_KEY_EVENTS_PER_STEP 8
 
 static wm_window_t g_windows[WM_MAX_WINDOWS];
 static UINTN g_window_count;
@@ -29,6 +34,9 @@ static INT32 g_drag_offset_y;
 static CHAR16 g_content[WM_MAX_WINDOWS][96];
 static UINT8 g_next_z;
 static BOOLEAN g_start_menu_open;
+static UINT64 g_fps_last_tick;
+static UINT32 g_fps_counter;
+static UINT32 g_fps_value;
 
 typedef struct {
     const CHAR16 *id;
@@ -40,8 +48,83 @@ static const start_item_t g_start_items[START_MENU_ITEM_COUNT] = {
     { L"files", L"File Browser" },
     { L"term", L"Terminal" },
     { L"settings", L"Settings" },
-    { L"tasks", L"Task Manager" }
+    { L"tasks", L"Task Manager" },
+    { L"logs", L"System Logs" }
 };
+
+static void append_text(CHAR16 *dst, UINTN max_chars, const CHAR16 *src) {
+    if (dst == NULL || src == NULL || max_chars == 0) {
+        return;
+    }
+
+    UINTN len = 0;
+    while (len + 1 < max_chars && dst[len] != 0) {
+        ++len;
+    }
+
+    UINTN i = 0;
+    while (len + 1 < max_chars && src[i] != 0) {
+        dst[len++] = src[i++];
+    }
+    dst[len] = 0;
+}
+
+static void to_decimal(UINT64 value, CHAR16 *out, UINTN max_chars) {
+    if (out == NULL || max_chars == 0) {
+        return;
+    }
+
+    if (value == 0) {
+        out[0] = L'0';
+        if (max_chars > 1) {
+            out[1] = 0;
+        }
+        return;
+    }
+
+    CHAR16 tmp[24];
+    UINTN len = 0;
+    while (value > 0 && len < 23) {
+        tmp[len++] = (CHAR16)(L'0' + (value % 10));
+        value /= 10;
+    }
+
+    UINTN out_index = 0;
+    while (len > 0 && out_index + 1 < max_chars) {
+        out[out_index++] = tmp[--len];
+    }
+    out[out_index] = 0;
+}
+
+static void render_debug_overlay(void) {
+    CHAR16 text[96];
+    CHAR16 value[24];
+
+    text[0] = 0;
+    append_text(text, 96, L"FPS ");
+    to_decimal(g_fps_value, value, 24);
+    append_text(text, 96, value);
+    append_text(text, 96, L"  P ");
+    to_decimal((UINT64)process_running_count(), value, 24);
+    append_text(text, 96, value);
+    append_text(text, 96, L"  T ");
+    to_decimal((UINT64)scheduler_task_count(), value, 24);
+    append_text(text, 96, value);
+    drawString(12, 12, text, 0x00D0E8FF, 0x00101820);
+
+    text[0] = 0;
+    append_text(text, 96, L"Tick ");
+    to_decimal(timer_ticks(), value, 24);
+    append_text(text, 96, value);
+    append_text(text, 96, L"  Heap ");
+    to_decimal((UINT64)(heap_used_bytes() / 1024), value, 24);
+    append_text(text, 96, value);
+    append_text(text, 96, L"/");
+    to_decimal((UINT64)(heap_total_bytes() / 1024), value, 24);
+    append_text(text, 96, value);
+    append_text(text, 96, L" KB");
+    drawString(12, 30, text, 0x00A8C8E8, 0x00101820);
+}
 
 static INT32 clamp_i32(INT32 value, INT32 low, INT32 high) {
     if (value < low) {
@@ -110,6 +193,15 @@ static void forward_input_to_focused_window(const input_event_t *event) {
         return;
     }
 
+    if (!process_is_running(window->owner_pid)) {
+        window->visible = FALSE;
+        window->invalidated = TRUE;
+        g_focused_window = 0;
+        g_active_window = 0;
+        g_dirty = TRUE;
+        return;
+    }
+
     event_packet_t packet;
     packet.channel = EVENT_CHANNEL_APP;
     packet.code = EVENT_CODE_APP_INPUT;
@@ -143,6 +235,9 @@ void wm_init(UINT32 desktop_w, UINT32 desktop_h) {
     g_drag_offset_y = 0;
     g_next_z = 1;
     g_start_menu_open = FALSE;
+    g_fps_last_tick = 0;
+    g_fps_counter = 0;
+    g_fps_value = 0;
 
     for (UINTN i = 0; i < WM_MAX_WINDOWS; ++i) {
         g_content[i][0] = 0;
@@ -328,8 +423,11 @@ static void handle_button_up(void) {
 
 void wm_dispatch_input(void) {
     event_packet_t packet;
-    while (event_bus_receive_channel(EVENT_CHANNEL_INPUT, &packet)) {
+
+    UINTN pointer_processed = 0;
+    while (pointer_processed < WM_POINTER_EVENTS_PER_STEP && event_bus_receive_channel(EVENT_CHANNEL_INPUT, &packet)) {
         if (packet.code != EVENT_CODE_INPUT || packet.payload_size < sizeof(input_event_t)) {
+            ++pointer_processed;
             continue;
         }
 
@@ -349,15 +447,49 @@ void wm_dispatch_input(void) {
             handle_button_up();
             forward_input_to_focused_window(&event);
             g_dirty = TRUE;
-        } else if (event.type == INPUT_EVENT_KEY_DOWN) {
+        }
+
+        ++pointer_processed;
+    }
+
+    UINTN key_processed = 0;
+    while (key_processed < WM_KEY_EVENTS_PER_STEP && event_bus_receive_channel(EVENT_CHANNEL_INPUT_KEYBOARD, &packet)) {
+        if (packet.code != EVENT_CODE_INPUT || packet.payload_size < sizeof(input_event_t)) {
+            ++key_processed;
+            continue;
+        }
+
+        input_event_t event;
+        UINT8 *dst = (UINT8 *)&event;
+        for (UINTN i = 0; i < sizeof(input_event_t); ++i) {
+            dst[i] = packet.payload[i];
+        }
+
+        if (event.type == INPUT_EVENT_KEY_DOWN) {
             forward_input_to_focused_window(&event);
             g_dirty = TRUE;
         }
+
+        ++key_processed;
     }
 }
 
 static void render_window(const wm_window_t *window) {
     if (window == NULL || !window->visible) {
+        return;
+    }
+
+    if (window->owner_pid != 0 && !process_is_running(window->owner_pid)) {
+        wm_window_t *owned_window = find_window(window->id);
+        if (owned_window != NULL) {
+            owned_window->visible = FALSE;
+            owned_window->invalidated = TRUE;
+            if (g_focused_window == owned_window->id) {
+                g_focused_window = 0;
+                g_active_window = 0;
+            }
+            g_dirty = TRUE;
+        }
         return;
     }
 
@@ -408,6 +540,16 @@ static void render_start_menu(void) {
 }
 
 void wm_render(void) {
+    UINT64 now = timer_ticks();
+    ++g_fps_counter;
+    if (g_fps_last_tick == 0) {
+        g_fps_last_tick = now;
+    } else if (now > g_fps_last_tick && (now - g_fps_last_tick) >= 1000) {
+        g_fps_value = g_fps_counter;
+        g_fps_counter = 0;
+        g_fps_last_tick = now;
+    }
+
     clearScreen(0x00101820);
     BOOLEAN rendered_flags[WM_MAX_WINDOWS];
     for (UINTN i = 0; i < WM_MAX_WINDOWS; ++i) {
@@ -437,6 +579,8 @@ void wm_render(void) {
     drawRect(6, (INT32)g_desktop_h - 24, START_BUTTON_W, START_BUTTON_H, g_start_menu_open ? 0x005080C0 : 0x003067B1);
     drawString(20, (INT32)g_desktop_h - 19, L"Start", 0x00FFFFFF, g_start_menu_open ? 0x005080C0 : 0x003067B1);
     drawString(90, (INT32)g_desktop_h - 20, L"Mars Desktop", 0x00FFFFFF, 0x00222B3A);
+
+    render_debug_overlay();
 
     render_start_menu();
 

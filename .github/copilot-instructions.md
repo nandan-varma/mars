@@ -1,39 +1,41 @@
 # Project Guidelines
 
 ## Code Style
-- This workspace is a freestanding C UEFI OS under `os/`.
-- Keep code compatible with strict flags used by `os/Makefile`: `-ffreestanding -fshort-wchar -fno-stack-protector -mno-red-zone -Wall -Wextra -Werror`.
-- Use local UEFI ABI/types from `os/include/uefi.h` (`EFIAPI`, `EFI_STATUS`, `UINTN`, protocol structs).
-- Follow existing style: module-static state (`g_*`), small helper functions, early-return guards, explicit bounds/clamp checks.
+- Workspace is a freestanding C UEFI OS under `os/`; keep code compatible with `os/Makefile` flags: `-ffreestanding -fshort-wchar -fno-stack-protector -mno-red-zone -Wall -Wextra -Werror`.
+- Use local ABI/types from `os/include/uefi.h` (`EFIAPI`, `EFI_STATUS`, `UINTN`, protocol structs); avoid libc assumptions.
+- Match existing style: module-static `g_*` state, small helpers, early-return guards, explicit bounds/clamp checks, fixed-size buffers.
 
 ## Architecture
-- Boot model is a single UEFI app (`BOOTX64.EFI`), entered via `efi_main` in `os/boot/efi_main.c`.
-- Handoff uses `boot_info_t` (`os/include/boot_info.h`) to pass GOP/system/input protocol pointers into `kernel_main`.
-- Main loop in `os/kernel/kernel.c`: poll input, drain queue, handle GUI events, conditional redraw, frame limit.
-- Rendering is CPU software rasterization in `os/graphics/framebuffer.c` + font/text rendering; GUI is immediate-mode in `os/gui/gui.c`.
+- Boot entry is `efi_main` in `os/boot/efi_main.c`, handing `boot_info_t` into `kernel_main`.
+- Runtime bring-up is in `os/kernel/kernel.c`: platform + memory/vm/heap + interrupts/timer + event bus + process/scheduler + input/wm/apps + vfs.
+- Scheduling is cooperative round-robin in `os/kernel/scheduler.c` (no preemptive context switch yet).
+- Active desktop path is WM/compositor in `os/gui/wm.c`; `os/gui/gui.c` exists but is not wired into current build/runtime.
+- Rendering is software rasterization with optional backbuffer + blit present in `os/graphics/framebuffer.c`.
 
 ## Build and Test
 - Build: `make -C os all`
-- Run in QEMU: `make -C os run`
-- Debug launch (gdb stub): `make -C os debug`
+- Run: `make -C os run`
+- Debug (gdb stub, halted): `make -C os debug`
 - GDB attach: `gdb os/esp/EFI/BOOT/BOOTX64.EFI` then `target remote :1234`
-- Toolchain setup helper: `os/scripts/setup_macos_toolchain.sh`
+- UEFI shell boot command: `FS0:\EFI\BOOT\BOOTX64.EFI`
+- Toolchain helper: `os/scripts/setup_macos_toolchain.sh`
 
 ## Project Conventions
-- Keep scope minimal: no multitasking, SMP, ACPI parsing, filesystem, networking, sound, or GPU drivers.
-- Input path is layered: UEFI Simple Pointer → UEFI Absolute Pointer → PS/2 fallback (`os/drivers/mouse_uefi.c`).
-- Input events use fixed ring buffer (`INPUT_QUEUE_CAPACITY` in `os/drivers/input.c`); overflow drops events.
-- `EXIT_BOOT_SERVICES` is compile-time gated in `os/boot/efi_main.c` (default disabled).
-- Prefer targeted fixes in existing modules; do not introduce large new subsystems.
+- Build auto-detects MinGW PE path when available; keep changes compatible with both MinGW and ELF+objcopy paths in `os/Makefile`.
+- Input is event-bus based: `os/drivers/input.c` publishes channel events; WM/apps consume via `os/kernel/event_bus.c`.
+- Mouse path priority is PS/2 → Absolute Pointer → Simple Pointer in `os/drivers/mouse_uefi.c`; keep direct I/O waits bounded.
+- `EXIT_BOOT_SERVICES` in `os/boot/efi_main.c` is compile-time gated and defaults to disabled.
+- Keep fixes targeted to existing modules; avoid large subsystem additions unless requested.
 
 ## Integration Points
-- Protocol discovery and boot setup: `os/boot/efi_main.c`.
-- Kernel orchestration/timing: `os/kernel/kernel.c`, `os/kernel/timer.c`.
-- Graphics primitives/text: `os/graphics/framebuffer.c`, `os/graphics/font8x16.c`.
-- GUI behavior/widgets: `os/gui/gui.c`.
-- Shared interfaces: `os/include/*.h`.
+- Boot protocol discovery + memory map handoff: `os/boot/efi_main.c`
+- Memory and paging scaffold: `os/kernel/memory.c`, `os/kernel/vm.c`
+- Desktop/window management + app window content: `os/gui/wm.c`, `os/kernel/app.c`
+- Event routing and process queues: `os/kernel/event_bus.c`, `os/kernel/process.c`
+- Shared interfaces: `os/include/*.h`
 
 ## Security
-- This is a single-address-space kernel prototype; no privilege separation exists.
-- Preserve defensive checks present in code: pointer null checks, framebuffer bounds checks, coordinate clamping, fixed-size text/event buffers.
-- Be careful with direct I/O port access in PS/2 code (`os/drivers/mouse_uefi.c`); keep loops bounded and non-blocking.
+- Single-address-space prototype: no strong isolation; capability checks are lightweight (`process/syscall` path).
+- Preserve current defensive patterns: null checks, payload-size checks, queue capacity checks, framebuffer bounds checks.
+- Be careful with PS/2 port I/O loops in `os/drivers/mouse_uefi.c`; keep them bounded and non-blocking.
+- `OVMF_VARS.fd` is optional in run/debug; without it, firmware variable persistence is reduced.

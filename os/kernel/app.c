@@ -1,5 +1,6 @@
 #include "app.h"
 
+#include "diag.h"
 #include "event_bus.h"
 #include "heap.h"
 #include "input.h"
@@ -7,6 +8,7 @@
 #include "wm.h"
 
 #define MAX_APPS 16
+#define APP_EVENTS_PER_STEP 12
 
 typedef struct {
     app_manifest_t manifest;
@@ -110,6 +112,53 @@ static void to_decimal(UINT64 value, CHAR16 *out, UINTN max_chars) {
     out[out_index] = 0;
 }
 
+static void copy_append_text(CHAR16 *dst, UINTN max_chars, const CHAR16 *src) {
+    if (dst == NULL || src == NULL || max_chars == 0) {
+        return;
+    }
+
+    UINTN len = 0;
+    while (len + 1 < max_chars && dst[len] != 0) {
+        ++len;
+    }
+
+    UINTN i = 0;
+    while (len + 1 < max_chars && src[i] != 0) {
+        dst[len++] = src[i++];
+    }
+    dst[len] = 0;
+}
+
+static void to_hex32(UINT32 value, CHAR16 *out, UINTN max_chars) {
+    static const CHAR16 digits[] = L"0123456789ABCDEF";
+    if (out == NULL || max_chars < 3) {
+        return;
+    }
+
+    out[0] = L'0';
+    out[1] = L'x';
+    UINTN written = 2;
+    BOOLEAN started = FALSE;
+
+    for (INT32 shift = 28; shift >= 0; shift -= 4) {
+        UINT32 nibble = (value >> (UINT32)shift) & 0xFU;
+        if (!started && nibble == 0 && shift > 0) {
+            continue;
+        }
+        started = TRUE;
+        if (written + 1 >= max_chars) {
+            break;
+        }
+        out[written++] = digits[nibble];
+    }
+
+    if (!started && written + 1 < max_chars) {
+        out[written++] = L'0';
+    }
+
+    out[written] = 0;
+}
+
 static void set_default_content(app_instance_t *instance) {
     if (instance == NULL) {
         return;
@@ -178,7 +227,8 @@ static BOOLEAN app_task_step(void *context) {
     }
 
     event_packet_t packet;
-    while (event_bus_receive(instance->pid, &packet)) {
+    UINTN processed = 0;
+    while (processed < APP_EVENTS_PER_STEP && event_bus_receive(instance->pid, &packet)) {
         if (packet.code == EVENT_CODE_APP_INPUT && packet.payload_size >= sizeof(input_event_t)) {
             input_event_t input;
             UINT8 *dst = (UINT8 *)&input;
@@ -187,6 +237,7 @@ static BOOLEAN app_task_step(void *context) {
             }
             handle_app_input(instance, &input);
         }
+        ++processed;
     }
 
     ++instance->ticks;
@@ -213,7 +264,7 @@ static BOOLEAN app_task_step(void *context) {
     if (equals_chars(instance->manifest.id, L"tasks")) {
         CHAR16 count_buf[24];
         CHAR16 text[96];
-        to_decimal((UINT64)process_count(), count_buf, 24);
+        to_decimal((UINT64)process_running_count(), count_buf, 24);
         copy_text(text, L"Tasks running: ", 96);
         UINTN len = 0;
         while (len < 95 && text[len] != 0) {
@@ -226,6 +277,26 @@ static BOOLEAN app_task_step(void *context) {
         text[len] = 0;
         copy_text(instance->content, text, 96);
         instance->content_len = len;
+    } else if (equals_chars(instance->manifest.id, L"logs")) {
+        diag_record_t latest;
+        CHAR16 domain_buf[20];
+        CHAR16 code_buf[20];
+        copy_text(instance->content, L"Logs: waiting", 96);
+
+        if (diag_latest(&latest)) {
+            to_hex32(latest.domain, domain_buf, 20);
+            to_hex32(latest.code, code_buf, 20);
+
+            copy_text(instance->content, L"Log ", 96);
+            copy_append_text(instance->content, 96, domain_buf);
+            copy_append_text(instance->content, 96, L"/");
+            copy_append_text(instance->content, 96, code_buf);
+        }
+
+        instance->content_len = 0;
+        while (instance->content_len < 95 && instance->content[instance->content_len] != 0) {
+            ++instance->content_len;
+        }
     }
 
     (void)wm_set_window_content(instance->window_id, instance->content);
@@ -253,6 +324,10 @@ BOOLEAN app_register(const app_manifest_t *manifest) {
 
 BOOLEAN app_launch(const CHAR16 *id) {
     if (id == NULL) {
+        return FALSE;
+    }
+
+    if (g_instance_count >= MAX_APPS) {
         return FALSE;
     }
 
@@ -298,13 +373,15 @@ BOOLEAN app_launch(const CHAR16 *id) {
             instance->manifest.width,
             instance->manifest.height
         );
+        if (instance->window_id == 0) {
+            process_exit(instance->pid, -2);
+            return FALSE;
+        }
 
         set_default_content(instance);
         (void)wm_set_window_content(instance->window_id, instance->content);
 
-        if (g_instance_count < MAX_APPS) {
-            g_instances[g_instance_count++] = instance;
-        }
+        g_instances[g_instance_count++] = instance;
 
         return instance->window_id != 0;
     }
@@ -318,7 +395,8 @@ void app_launch_core_suite(void) {
         { L"files", L"File Browser", CAP_STORAGE | CAP_GRAPHICS, 160, 120, 420, 300 },
         { L"term", L"Terminal", CAP_SYSTEM | CAP_INPUT, 240, 150, 460, 300 },
         { L"settings", L"Settings", CAP_GRAPHICS, 320, 180, 360, 260 },
-        { L"tasks", L"Task Manager", CAP_SYSTEM, 400, 210, 360, 260 }
+        { L"tasks", L"Task Manager", CAP_SYSTEM, 400, 210, 360, 260 },
+        { L"logs", L"System Logs", CAP_SYSTEM, 460, 240, 380, 160 }
     };
 
     for (UINTN i = 0; i < (sizeof(defaults) / sizeof(defaults[0])); ++i) {

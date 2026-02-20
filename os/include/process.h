@@ -34,6 +34,7 @@ UINT32 process_current_pid(void);
 void process_set_current_pid(UINT32 pid);
 UINT32 process_capabilities(UINT32 pid);
 UINTN process_count(void);
+UINTN process_running_count(void);
 BOOLEAN process_is_running(UINT32 pid);
 
 #endif

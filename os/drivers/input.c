@@ -9,7 +9,9 @@ static BOOLEAN publish_input_event(const input_event_t *event) {
     }
 
     event_packet_t packet;
-    packet.channel = EVENT_CHANNEL_INPUT;
+    packet.channel = (event->type == INPUT_EVENT_KEY_DOWN)
+        ? EVENT_CHANNEL_INPUT_KEYBOARD
+        : EVENT_CHANNEL_INPUT;
     packet.code = EVENT_CODE_INPUT;
     packet.source_pid = 0;
     packet.target_pid = 0;
@@ -62,7 +64,9 @@ BOOLEAN input_pop_event(input_event_t *out_event) {
 
     event_packet_t packet;
     if (!event_bus_receive_channel(EVENT_CHANNEL_INPUT, &packet)) {
-        return FALSE;
+        if (!event_bus_receive_channel(EVENT_CHANNEL_INPUT_KEYBOARD, &packet)) {
+            return FALSE;
+        }
     }
 
     if (packet.code != EVENT_CODE_INPUT || packet.payload_size < sizeof(input_event_t)) {

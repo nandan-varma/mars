@@ -11,10 +11,14 @@ typedef struct {
     UINT32 pid;
 } process_event_queue_t;
 
+typedef struct {
+    event_packet_t queue[EVENT_QUEUE_CAPACITY];
+    UINTN head;
+    UINTN tail;
+} channel_event_queue_t;
+
 static process_event_queue_t g_queues[EVENT_MAX_PROCESSES];
-static event_packet_t g_channel_queue[EVENT_QUEUE_CAPACITY];
-static UINTN g_channel_head;
-static UINTN g_channel_tail;
+static channel_event_queue_t g_channel_queues[EVENT_CHANNEL_COUNT];
 
 static void copy_packet(event_packet_t *dst, const event_packet_t *src) {
     const UINT8 *src_bytes = (const UINT8 *)src;
@@ -46,8 +50,10 @@ static BOOLEAN queue_pop(event_packet_t *queue, UINTN *head, UINTN *tail, event_
 }
 
 void event_bus_init(void) {
-    g_channel_head = 0;
-    g_channel_tail = 0;
+    for (UINTN channel = 0; channel < EVENT_CHANNEL_COUNT; ++channel) {
+        g_channel_queues[channel].head = 0;
+        g_channel_queues[channel].tail = 0;
+    }
 
     for (UINTN i = 0; i < EVENT_MAX_PROCESSES; ++i) {
         g_queues[i].head = 0;
@@ -93,7 +99,12 @@ BOOLEAN event_bus_publish(const event_packet_t *packet) {
         return FALSE;
     }
 
-    BOOLEAN accepted = queue_push(g_channel_queue, &g_channel_head, &g_channel_tail, packet);
+    BOOLEAN accepted = FALSE;
+
+    if (packet->channel < EVENT_CHANNEL_COUNT) {
+        channel_event_queue_t *channel_queue = &g_channel_queues[packet->channel];
+        accepted = queue_push(channel_queue->queue, &channel_queue->head, &channel_queue->tail, packet);
+    }
 
     if (packet->target_pid == 0) {
         return accepted;
@@ -136,22 +147,10 @@ BOOLEAN event_bus_receive_channel(UINT32 channel, event_packet_t *out_packet) {
         return FALSE;
     }
 
-    event_packet_t packet;
-    UINTN start = g_channel_head;
-    while (queue_pop(g_channel_queue, &g_channel_head, &g_channel_tail, &packet)) {
-        if (packet.channel == channel) {
-            copy_packet(out_packet, &packet);
-            return TRUE;
-        }
-
-        if (!queue_push(g_channel_queue, &g_channel_head, &g_channel_tail, &packet)) {
-            return FALSE;
-        }
-
-        if (g_channel_head == start) {
-            break;
-        }
+    if (channel >= EVENT_CHANNEL_COUNT) {
+        return FALSE;
     }
 
-    return FALSE;
+    channel_event_queue_t *channel_queue = &g_channel_queues[channel];
+    return queue_pop(channel_queue->queue, &channel_queue->head, &channel_queue->tail, out_packet);
 }

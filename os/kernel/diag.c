@@ -36,6 +36,16 @@ diag_snapshot_t diag_snapshot(void) {
     return snapshot;
 }
 
+BOOLEAN diag_latest(diag_record_t *out_record) {
+    if (out_record == NULL || g_count == 0) {
+        return FALSE;
+    }
+
+    UINTN latest = (g_head == 0) ? (DIAG_MAX_RECORDS - 1) : (g_head - 1);
+    *out_record = g_records[latest];
+    return TRUE;
+}
+
 void diag_capture_crash(UINTN vector, UINT64 code, UINT64 address) {
     diag_log(0xDEADU, (UINT32)vector, code, address);
 }

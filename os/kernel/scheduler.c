@@ -86,6 +86,10 @@ void scheduler_step(void) {
         process_set_current_pid(0);
         task->runtime_ticks += 1;
         task->state = keep_running ? TASK_READY : TASK_STOPPED;
+        if (!keep_running && task->owner_pid != 0) {
+            diag_log(0x501U, task->id, task->owner_pid, task->runtime_ticks);
+            process_exit(task->owner_pid, -1);
+        }
         g_rr_index = (index + 1) % g_task_count;
         break;
     }
