@@ -334,6 +334,48 @@ static void render_window(const wm_window_t *window) {
     }
 }
 
+#define WM_CURSOR_W 12
+#define WM_CURSOR_H 19
+
+static void render_mouse_cursor(INT32 hx, INT32 hy) {
+    /*
+     * macOS-style arrow cursor bitmap (12x19)
+     * 0 = transparent, 1 = white border, 2 = black fill
+     */
+    static const UINT8 cursor[19][12] = {
+        {1,0,0,0,0,0,0,0,0,0,0,0},
+        {1,1,0,0,0,0,0,0,0,0,0,0},
+        {1,2,1,0,0,0,0,0,0,0,0,0},
+        {1,2,2,1,0,0,0,0,0,0,0,0},
+        {1,2,2,2,1,0,0,0,0,0,0,0},
+        {1,2,2,2,2,1,0,0,0,0,0,0},
+        {1,2,2,2,2,2,1,0,0,0,0,0},
+        {1,2,2,2,2,2,2,1,0,0,0,0},
+        {1,2,2,2,2,2,2,2,1,0,0,0},
+        {1,2,2,2,2,2,2,2,2,1,0,0},
+        {1,2,2,2,2,2,2,2,2,2,1,0},
+        {1,2,2,2,2,2,2,1,1,1,1,1},
+        {1,2,2,2,1,2,2,1,0,0,0,0},
+        {1,2,2,1,0,1,2,2,1,0,0,0},
+        {1,2,1,0,0,1,2,2,1,0,0,0},
+        {1,1,0,0,0,0,1,2,2,1,0,0},
+        {1,0,0,0,0,0,1,2,2,1,0,0},
+        {0,0,0,0,0,0,0,1,2,2,1,0},
+        {0,0,0,0,0,0,0,1,1,1,0,0},
+    };
+
+    for (INT32 y = 0; y < 19; ++y) {
+        for (INT32 x = 0; x < 12; ++x) {
+            UINT8 p = cursor[y][x];
+            if (p == 1) {
+                drawPixel(hx + x, hy + y, 0x00FFFFFF);
+            } else if (p == 2) {
+                drawPixel(hx + x, hy + y, 0x00000000);
+            }
+        }
+    }
+}
+
 void wm_render(void) {
     wm_state_t *state = wm_state();
 
@@ -402,14 +444,15 @@ void wm_render(void) {
         wm_render_start_menu();
     }
 
-    drawRect(input_mouse_x(), input_mouse_y(), 6, 10, 0x00FFFFFF);
-    drawRect(input_mouse_x() + 1, input_mouse_y() + 1, 4, 8, 0x000B1E38);
+    INT32 cursor_x = input_mouse_x();
+    INT32 cursor_y = input_mouse_y();
+    render_mouse_cursor(cursor_x, cursor_y);
     if (clock_only) {
         framebuffer_present_region(0, taskbar_y, (INT32)state->desktop_w, TASKBAR_H);
         if (state->show_debug_overlay) {
             framebuffer_present_region(8, 8, 356, 108);
         }
-        framebuffer_present_region(input_mouse_x(), input_mouse_y(), 8, 12);
+        framebuffer_present_region(cursor_x - 1, cursor_y - 1, WM_CURSOR_W + 2, WM_CURSOR_H + 2);
     } else {
         framebuffer_present();
     }
