@@ -1,0 +1,16 @@
+# OS build artifacts
+os/build/
+os/esp/EFI/BOOT/BOOTX64.EFI
+
+# Firmware variable store
+os/OVMF_VARS.fd
+
+# Common editor/OS noise
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
