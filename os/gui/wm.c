@@ -6,6 +6,7 @@
 #include "heap.h"
 #include "input.h"
 #include "os_string.h"
+#include "platform.h"
 #include "process.h"
 #include "scheduler.h"
 #include "timer.h"
@@ -19,6 +20,7 @@
 #define WM_POINTER_EVENTS_PER_STEP 16
 #define WM_KEY_EVENTS_PER_STEP 8
 #define TASKBAR_H 30
+#define WM_CONTENT_CHARS 512
 
 static wm_window_t g_windows[WM_MAX_WINDOWS];
 static UINTN g_window_count;
@@ -32,12 +34,16 @@ static BOOLEAN g_resizing;
 static UINT32 g_active_window;
 static INT32 g_drag_offset_x;
 static INT32 g_drag_offset_y;
-static CHAR16 g_content[WM_MAX_WINDOWS][96];
+static CHAR16 g_content[WM_MAX_WINDOWS][WM_CONTENT_CHARS];
 static UINT8 g_next_z;
 static BOOLEAN g_start_menu_open;
 static UINT64 g_fps_last_tick;
 static UINT32 g_fps_counter;
 static UINT32 g_fps_value;
+static BOOLEAN g_show_debug_overlay;
+static UINT64 g_clock_last_second;
+static UINT64 g_fallback_clock_second;
+static UINTN g_fallback_clock_hz;
 
 typedef struct {
     const CHAR16 *id;
@@ -126,6 +132,80 @@ static void format_time(UINT64 ticks, CHAR16 *out, UINTN max_chars) {
     out[6] = ss[0];
     out[7] = ss[1];
     out[8] = 0;
+}
+
+static BOOLEAN query_wall_clock(EFI_TIME *out_time, UINT64 *out_second_of_day) {
+    if (out_time == NULL || out_second_of_day == NULL) {
+        return FALSE;
+    }
+
+    const platform_context_t *platform = platform_context();
+    if (platform == NULL || platform->runtime_services == NULL || platform->runtime_services->GetTime == NULL) {
+        return FALSE;
+    }
+
+    EFI_TIME time;
+    EFI_STATUS status = platform->runtime_services->GetTime(&time, NULL);
+    if (EFI_ERROR(status)) {
+        return FALSE;
+    }
+
+    if (time.Hour > 23 || time.Minute > 59 || time.Second > 59) {
+        return FALSE;
+    }
+
+    *out_time = time;
+    *out_second_of_day = ((UINT64)time.Hour * 3600ULL) + ((UINT64)time.Minute * 60ULL) + (UINT64)time.Second;
+    return TRUE;
+}
+
+static UINT64 fallback_second_of_day(void) {
+    UINTN hz = timer_hz();
+    if (hz == 0) {
+        hz = 1;
+    }
+
+    UINT64 sec = timer_ticks() / (UINT64)hz;
+    if (g_fallback_clock_hz != hz) {
+        g_fallback_clock_hz = hz;
+        g_fallback_clock_second = sec;
+    } else {
+        g_fallback_clock_second = sec;
+    }
+    return g_fallback_clock_second % 86400ULL;
+}
+
+static UINT64 current_second_of_day(void) {
+    EFI_TIME time;
+    UINT64 second = 0;
+    if (query_wall_clock(&time, &second)) {
+        return second;
+    }
+    return fallback_second_of_day();
+}
+
+static void format_clock_text(CHAR16 *out, UINTN max_chars) {
+    if (out == NULL || max_chars < 9) {
+        return;
+    }
+
+    EFI_TIME time;
+    UINT64 second = 0;
+    if (query_wall_clock(&time, &second)) {
+        (void)second;
+        CHAR16 hh[3];
+        CHAR16 mm[3];
+        CHAR16 ss[3];
+        format_two_digits((UINTN)time.Hour, hh);
+        format_two_digits((UINTN)time.Minute, mm);
+        format_two_digits((UINTN)time.Second, ss);
+        out[0] = hh[0]; out[1] = hh[1]; out[2] = L':';
+        out[3] = mm[0]; out[4] = mm[1]; out[5] = L':';
+        out[6] = ss[0]; out[7] = ss[1]; out[8] = 0;
+        return;
+    }
+
+    format_time(timer_ticks(), out, max_chars);
 }
 
 static void to_decimal(UINT64 value, CHAR16 *out, UINTN max_chars) {
@@ -316,6 +396,10 @@ void wm_init(UINT32 desktop_w, UINT32 desktop_h) {
     g_fps_last_tick = 0;
     g_fps_counter = 0;
     g_fps_value = 0;
+    g_show_debug_overlay = TRUE;
+    g_clock_last_second = (UINT64)-1;
+    g_fallback_clock_second = 0;
+    g_fallback_clock_hz = timer_hz();
 
     for (UINTN i = 0; i < WM_MAX_WINDOWS; ++i) {
         g_content[i][0] = 0;
@@ -599,8 +683,42 @@ static void render_window(const wm_window_t *window) {
 
     UINTN index = window_index_by_id(window->id);
     if (index < g_window_count && g_content[index][0] != 0) {
-        drawRect(window->x + 8, window->y + 30, window->width - 16, 20, 0x00EAF0F7);
-        drawString(window->x + 12, window->y + 34, g_content[index], 0x00101A27, 0x00EAF0F7);
+        INT32 content_x = window->x + 8;
+        INT32 content_y = window->y + 30;
+        INT32 content_w = window->width - 16;
+        INT32 content_h = window->height - 38;
+        if (content_w > 0 && content_h > 0) {
+            drawRect(content_x, content_y, content_w, content_h, 0x00EAF0F7);
+
+            INT32 max_cols = content_w / 8;
+            INT32 max_rows = content_h / 16;
+            if (max_cols > 0 && max_rows > 0) {
+                INT32 row = 0;
+                INT32 col = 0;
+                for (UINTN i = 0; i < WM_CONTENT_CHARS && g_content[index][i] != 0; ++i) {
+                    CHAR16 ch = g_content[index][i];
+                    if (ch == L'\n') {
+                        ++row;
+                        col = 0;
+                        if (row >= max_rows) {
+                            break;
+                        }
+                        continue;
+                    }
+
+                    if (col >= max_cols) {
+                        ++row;
+                        col = 0;
+                        if (row >= max_rows) {
+                            break;
+                        }
+                    }
+
+                    drawChar(content_x + 2 + (col * 8), content_y + 2 + (row * 16), ch, 0x00101A27, 0x00EAF0F7);
+                    ++col;
+                }
+            }
+        }
     }
 }
 
@@ -634,6 +752,7 @@ static void render_start_menu(void) {
 
 void wm_render(void) {
     UINT64 now = timer_ticks();
+    g_clock_last_second = current_second_of_day();
     ++g_fps_counter;
     if (g_fps_last_tick == 0) {
         g_fps_last_tick = now;
@@ -680,11 +799,13 @@ void wm_render(void) {
     drawString(90, taskbar_y + 8, L"Mars Desktop", 0x00CFE1F6, taskbar_bg);
 
     CHAR16 time_text[16];
-    format_time(now, time_text, 16);
+    format_clock_text(time_text, 16);
     drawRect((INT32)g_desktop_w - 92, taskbar_y + 4, 84, START_BUTTON_H, 0x002A3548);
     drawString((INT32)g_desktop_w - 84, taskbar_y + 8, time_text, 0x00DDEBFF, 0x002A3548);
 
-    render_debug_overlay();
+    if (g_show_debug_overlay) {
+        render_debug_overlay();
+    }
 
     render_start_menu();
 
@@ -696,6 +817,12 @@ void wm_render(void) {
 
 BOOLEAN wm_needs_redraw(void) {
     if (g_dirty) {
+        return TRUE;
+    }
+
+    UINT64 second = current_second_of_day();
+    if (second != g_clock_last_second) {
+        g_dirty = TRUE;
         return TRUE;
     }
 
@@ -733,8 +860,17 @@ BOOLEAN wm_set_window_content(UINT32 window_id, const CHAR16 *text) {
         return FALSE;
     }
 
-    os_strcpy16(g_content[index], text, 96);
+    os_strcpy16(g_content[index], text, WM_CONTENT_CHARS);
     g_windows[index].invalidated = TRUE;
     g_dirty = TRUE;
     return TRUE;
+}
+
+void wm_set_debug_overlay(BOOLEAN enabled) {
+    g_show_debug_overlay = enabled;
+    g_dirty = TRUE;
+}
+
+BOOLEAN wm_debug_overlay_enabled(void) {
+    return g_show_debug_overlay;
 }

@@ -10,6 +10,7 @@ void platform_init_from_boot(const boot_info_t *boot_info) {
     g_platform.framebuffer = boot_info->framebuffer;
     g_platform.memory_map = boot_info->memory_map;
     g_platform.input = boot_info->input;
+    g_platform.runtime_services = boot_info->runtime.runtime_services;
 }
 
 const platform_context_t *platform_context(void) {

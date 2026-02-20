@@ -28,5 +28,6 @@ UINT32 scheduler_create_task(UINT32 owner_pid, const CHAR16 *name, UINT8 priorit
 void scheduler_run(void);
 void scheduler_step(void);
 UINTN scheduler_task_count(void);
+BOOLEAN scheduler_task_at(UINTN index, task_t *out_task);
 
 #endif

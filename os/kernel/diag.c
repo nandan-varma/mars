@@ -46,6 +46,17 @@ BOOLEAN diag_latest(diag_record_t *out_record) {
     return TRUE;
 }
 
+BOOLEAN diag_recent(UINTN offset_from_latest, diag_record_t *out_record) {
+    if (out_record == NULL || g_count == 0 || offset_from_latest >= g_count) {
+        return FALSE;
+    }
+
+    UINTN latest = (g_head == 0) ? (DIAG_MAX_RECORDS - 1) : (g_head - 1);
+    UINTN index = (latest + DIAG_MAX_RECORDS - (offset_from_latest % DIAG_MAX_RECORDS)) % DIAG_MAX_RECORDS;
+    *out_record = g_records[index];
+    return TRUE;
+}
+
 void diag_capture_crash(UINTN vector, UINT64 code, UINT64 address) {
     diag_log(0xDEADU, (UINT32)vector, code, address);
 }

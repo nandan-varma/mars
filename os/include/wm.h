@@ -25,5 +25,7 @@ BOOLEAN wm_needs_redraw(void);
 UINT32 wm_focused_window(void);
 BOOLEAN wm_focus_window(UINT32 window_id);
 BOOLEAN wm_set_window_content(UINT32 window_id, const CHAR16 *text);
+void wm_set_debug_overlay(BOOLEAN enabled);
+BOOLEAN wm_debug_overlay_enabled(void);
 
 #endif

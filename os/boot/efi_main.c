@@ -268,6 +268,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     boot_info.input.text_input_ex = text_input_ex;
     boot_info.input.simple_pointer = simple_pointer;
     boot_info.input.absolute_pointer = absolute_pointer;
+    boot_info.runtime.runtime_services = system_table->RuntimeServices;
 
     status = maybe_exit_boot_services(image_handle, system_table);
     if (EFI_ERROR(status)) {
@@ -283,6 +284,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     boot_info.input.text_input_ex = NULL;
     boot_info.input.simple_pointer = NULL;
     boot_info.input.absolute_pointer = NULL;
+    boot_info.runtime.runtime_services = NULL;
 #endif
 
     kernel_main(&boot_info);

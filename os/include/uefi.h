@@ -92,6 +92,26 @@ typedef struct {
 } EFI_INPUT_KEY;
 
 typedef struct {
+    UINT16 Year;
+    UINT8 Month;
+    UINT8 Day;
+    UINT8 Hour;
+    UINT8 Minute;
+    UINT8 Second;
+    UINT8 Pad1;
+    UINT32 Nanosecond;
+    INT16 TimeZone;
+    UINT8 Daylight;
+    UINT8 Pad2;
+} EFI_TIME;
+
+typedef struct {
+    UINT32 Resolution;
+    UINT32 Accuracy;
+    BOOLEAN SetsToZero;
+} EFI_TIME_CAPABILITIES;
+
+typedef struct {
     UINT32 KeyShiftState;
     UINT8 KeyToggleState;
 } EFI_KEY_STATE;
@@ -255,6 +275,24 @@ struct EFI_BOOT_SERVICES {
     VOID *CopyMem;
     VOID *SetMem;
     VOID *CreateEventEx;
+};
+
+struct EFI_RUNTIME_SERVICES {
+    EFI_TABLE_HEADER Hdr;
+    EFI_STATUS(EFIAPI *GetTime)(EFI_TIME *Time, EFI_TIME_CAPABILITIES *Capabilities);
+    VOID *SetTime;
+    VOID *GetWakeupTime;
+    VOID *SetWakeupTime;
+    VOID *SetVirtualAddressMap;
+    VOID *ConvertPointer;
+    VOID *GetVariable;
+    VOID *GetNextVariableName;
+    VOID *SetVariable;
+    VOID *GetNextHighMonotonicCount;
+    VOID *ResetSystem;
+    VOID *UpdateCapsule;
+    VOID *QueryCapsuleCapabilities;
+    VOID *QueryVariableInfo;
 };
 
 struct EFI_SYSTEM_TABLE {

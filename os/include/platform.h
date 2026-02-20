@@ -7,6 +7,7 @@ typedef struct {
     boot_framebuffer_t framebuffer;
     boot_memory_map_t memory_map;
     boot_input_handles_t input;
+    EFI_RUNTIME_SERVICES *runtime_services;
 } platform_context_t;
 
 void platform_init_from_boot(const boot_info_t *boot_info);

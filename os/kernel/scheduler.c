@@ -104,3 +104,12 @@ void scheduler_run(void) {
 UINTN scheduler_task_count(void) {
     return g_task_count;
 }
+
+BOOLEAN scheduler_task_at(UINTN index, task_t *out_task) {
+    if (out_task == NULL || index >= g_task_count) {
+        return FALSE;
+    }
+
+    *out_task = g_tasks[index];
+    return TRUE;
+}

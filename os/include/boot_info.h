@@ -29,10 +29,15 @@ typedef struct {
 } boot_bootstrap_services_t;
 
 typedef struct {
+    EFI_RUNTIME_SERVICES *runtime_services;
+} boot_runtime_services_t;
+
+typedef struct {
     boot_framebuffer_t framebuffer;
     boot_memory_map_t memory_map;
     boot_input_handles_t input;
     boot_bootstrap_services_t bootstrap;
+    boot_runtime_services_t runtime;
 } boot_info_t;
 
 #endif
