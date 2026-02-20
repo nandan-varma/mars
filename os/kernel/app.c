@@ -34,6 +34,7 @@ static app_manifest_t g_manifests[MAX_APPS];
 static UINTN g_manifest_count;
 static app_instance_t *g_instances[MAX_APPS];
 static UINTN g_instance_count;
+static UINT32 g_app_manager_pid;
 
 static void copy_chars(CHAR16 *dst, const CHAR16 *src, UINTN max_chars) {
     if (max_chars == 0) {
@@ -150,6 +151,18 @@ static void copy_text(CHAR16 *dst, const CHAR16 *src, UINTN max_chars) {
         ++i;
     }
     dst[i] = 0;
+}
+
+static UINTN bounded_text_len(const CHAR16 *text, UINTN max_chars) {
+    UINTN len = 0;
+    if (text == NULL) {
+        return 0;
+    }
+
+    while (len < max_chars && text[len] != 0) {
+        ++len;
+    }
+    return len;
 }
 
 static void to_decimal(UINT64 value, CHAR16 *out, UINTN max_chars) {
@@ -735,12 +748,47 @@ static BOOLEAN app_task_step(void *context) {
     return TRUE;
 }
 
+static BOOLEAN app_manager_task(void *context) {
+    (void)context;
+
+    event_packet_t packet;
+    UINTN processed = 0;
+    while (processed < APP_EVENTS_PER_STEP && event_bus_receive_channel(EVENT_CHANNEL_SYSTEM, &packet)) {
+        if (packet.code == EVENT_CODE_APP_LAUNCH_REQUEST && packet.payload_size >= sizeof(CHAR16)) {
+            CHAR16 id[24];
+            UINTN id_bytes = packet.payload_size;
+            if (id_bytes > sizeof(id) - sizeof(CHAR16)) {
+                id_bytes = sizeof(id) - sizeof(CHAR16);
+            }
+
+            UINTN i = 0;
+            for (; i < id_bytes; ++i) {
+                ((UINT8 *)id)[i] = packet.payload[i];
+            }
+            for (; i < sizeof(id); ++i) {
+                ((UINT8 *)id)[i] = 0;
+            }
+            id[(sizeof(id) / sizeof(id[0])) - 1] = 0;
+
+            if (bounded_text_len(id, 24) > 0) {
+                (void)app_launch(id);
+            }
+        }
+        ++processed;
+    }
+
+    return TRUE;
+}
+
 void app_framework_init(void) {
     g_manifest_count = 0;
     g_instance_count = 0;
+    g_app_manager_pid = 0;
     for (UINTN i = 0; i < MAX_APPS; ++i) {
         g_instances[i] = NULL;
     }
+
+    g_app_manager_pid = process_create_kernel(L"app-manager", app_manager_task, NULL, 1, CAP_SYSTEM);
 }
 
 BOOLEAN app_register(const app_manifest_t *manifest) {
@@ -795,7 +843,7 @@ BOOLEAN app_launch(const CHAR16 *id) {
         instance->history_len = 0;
         instance->input_line[0] = 0;
         instance->input_len = 0;
-        instance->pid = process_create_kernel(instance->manifest.title, app_task_step, instance, 2, instance->manifest.capabilities);
+        instance->pid = process_create_kernel(instance->manifest.title, app_task_step, instance, 1, instance->manifest.capabilities);
         if (instance->pid == 0) {
             return FALSE;
         }

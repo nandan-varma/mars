@@ -37,11 +37,25 @@ void scheduler_init(void) {
 }
 
 UINT32 scheduler_create_task(UINT32 owner_pid, const CHAR16 *name, UINT8 priority, task_entry_t entry, void *context) {
-    if (g_task_count >= MAX_TASKS || entry == NULL) {
+    if (entry == NULL) {
         return 0;
     }
 
-    task_t *task = &g_tasks[g_task_count++];
+    task_t *task = NULL;
+    for (UINTN i = 0; i < g_task_count; ++i) {
+        if (g_tasks[i].state == TASK_STOPPED) {
+            task = &g_tasks[i];
+            break;
+        }
+    }
+
+    if (task == NULL) {
+        if (g_task_count >= MAX_TASKS) {
+            return 0;
+        }
+        task = &g_tasks[g_task_count++];
+    }
+
     task->id = g_next_task_id++;
     task->owner_pid = owner_pid;
     task->priority = priority;
@@ -51,6 +65,25 @@ UINT32 scheduler_create_task(UINT32 owner_pid, const CHAR16 *name, UINT8 priorit
     task->context = context;
     copy_name(task->name, name, 24);
     return task->id;
+}
+
+void scheduler_stop_task(UINT32 task_id) {
+    if (task_id == 0) {
+        return;
+    }
+
+    for (UINTN i = 0; i < g_task_count; ++i) {
+        if (g_tasks[i].id != task_id) {
+            continue;
+        }
+
+        g_tasks[i].state = TASK_STOPPED;
+        g_tasks[i].owner_pid = 0;
+        g_tasks[i].entry = NULL;
+        g_tasks[i].context = NULL;
+        g_tasks[i].name[0] = 0;
+        return;
+    }
 }
 
 static void scheduler_dispatch_tick(void) {
@@ -72,11 +105,11 @@ void scheduler_step(void) {
         UINTN index = (start + offset) % g_task_count;
         task_t *task = &g_tasks[index];
         if (task->owner_pid != 0 && !process_is_running(task->owner_pid)) {
-            task->state = TASK_STOPPED;
+            scheduler_stop_task(task->id);
             continue;
         }
 
-        if (task->state != TASK_READY && task->state != TASK_RUNNING) {
+        if ((task->state != TASK_READY && task->state != TASK_RUNNING) || task->entry == NULL) {
             continue;
         }
 
@@ -102,14 +135,33 @@ void scheduler_run(void) {
 }
 
 UINTN scheduler_task_count(void) {
-    return g_task_count;
+    UINTN active = 0;
+    for (UINTN i = 0; i < g_task_count; ++i) {
+        if (g_tasks[i].state != TASK_STOPPED && g_tasks[i].entry != NULL) {
+            ++active;
+        }
+    }
+    return active;
 }
 
 BOOLEAN scheduler_task_at(UINTN index, task_t *out_task) {
-    if (out_task == NULL || index >= g_task_count) {
+    if (out_task == NULL) {
         return FALSE;
     }
 
-    *out_task = g_tasks[index];
-    return TRUE;
+    UINTN active_index = 0;
+    for (UINTN i = 0; i < g_task_count; ++i) {
+        if (g_tasks[i].state == TASK_STOPPED || g_tasks[i].entry == NULL) {
+            continue;
+        }
+
+        if (active_index == index) {
+            *out_task = g_tasks[i];
+            return TRUE;
+        }
+
+        ++active_index;
+    }
+
+    return FALSE;
 }

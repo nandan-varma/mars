@@ -1,6 +1,5 @@
 #include "wm.h"
 
-#include "app.h"
 #include "event_bus.h"
 #include "framebuffer.h"
 #include "heap.h"
@@ -58,6 +57,49 @@ static const start_item_t g_start_items[START_MENU_ITEM_COUNT] = {
     { L"tasks", L"Task Manager" },
     { L"logs", L"System Logs" }
 };
+
+static UINTN text_len16(const CHAR16 *text, UINTN max_chars) {
+    if (text == NULL) {
+        return 0;
+    }
+
+    UINTN len = 0;
+    while (len < max_chars && text[len] != 0) {
+        ++len;
+    }
+
+    return len;
+}
+
+static void publish_launch_request(const CHAR16 *app_id) {
+    if (app_id == NULL) {
+        return;
+    }
+
+    event_packet_t packet;
+    packet.channel = EVENT_CHANNEL_SYSTEM;
+    packet.code = EVENT_CODE_APP_LAUNCH_REQUEST;
+    packet.source_pid = 0;
+    packet.target_pid = 0;
+    packet.target_window = 0;
+
+    UINTN id_chars = text_len16(app_id, 24);
+    UINTN id_bytes = (id_chars + 1) * sizeof(CHAR16);
+    if (id_bytes > EVENT_PAYLOAD_BYTES) {
+        id_bytes = EVENT_PAYLOAD_BYTES;
+    }
+    packet.payload_size = (UINT32)id_bytes;
+
+    UINTN i = 0;
+    for (; i < id_bytes; ++i) {
+        packet.payload[i] = ((const UINT8 *)app_id)[i];
+    }
+    for (; i < EVENT_PAYLOAD_BYTES; ++i) {
+        packet.payload[i] = 0;
+    }
+
+    (void)event_bus_publish(&packet);
+}
 
 static void append_text(CHAR16 *dst, UINTN max_chars, const CHAR16 *src) {
     if (dst == NULL || src == NULL || max_chars == 0) {
@@ -249,8 +291,8 @@ static void render_debug_overlay(void) {
     append_text(text, 96, L"  TASK ");
     to_decimal((UINT64)scheduler_task_count(), value, 24);
     append_text(text, 96, value);
-    drawRect(8, 8, 356, 44, 0x00151F2E);
-    drawRect(9, 9, 354, 42, 0x00111A27);
+    drawRect(8, 8, 356, 60, 0x00151F2E);
+    drawRect(9, 9, 354, 58, 0x00111A27);
     drawString(16, 14, text, 0x00D7E6F8, 0x00111A27);
 
     text[0] = 0;
@@ -265,6 +307,15 @@ static void render_debug_overlay(void) {
     append_text(text, 96, value);
     append_text(text, 96, L" KB");
     drawString(16, 32, text, 0x00A8C8E8, 0x00111A27);
+
+    text[0] = 0;
+    append_text(text, 96, L"Event drops ch=");
+    to_decimal(event_bus_channel_drop_count(), value, 24);
+    append_text(text, 96, value);
+    append_text(text, 96, L" pid=");
+    to_decimal(event_bus_process_drop_count(), value, 24);
+    append_text(text, 96, value);
+    drawString(16, 50, text, 0x0096BAD9, 0x00111A27);
 }
 
 static void render_desktop_background(void) {
@@ -507,7 +558,7 @@ static BOOLEAN handle_start_menu_click(INT32 mouse_x, INT32 mouse_y) {
 
     UINTN index = (UINTN)(local_y / START_MENU_ITEM_H);
     if (index < START_MENU_ITEM_COUNT) {
-        (void)app_launch(g_start_items[index].id);
+        publish_launch_request(g_start_items[index].id);
         g_start_menu_open = FALSE;
         g_dirty = TRUE;
     }

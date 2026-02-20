@@ -12,6 +12,7 @@ typedef struct {
 static page_region_t g_regions[MAX_PAGE_REGIONS];
 static UINTN g_region_count;
 static UINTN g_total_pages;
+static EFI_BOOT_SERVICES *g_boot_services;
 
 static EFI_MEMORY_DESCRIPTOR *nth_descriptor(const platform_context_t *platform, UINTN index) {
     return (EFI_MEMORY_DESCRIPTOR *)((UINT8 *)platform->memory_map.map + index * platform->memory_map.descriptor_size);
@@ -20,8 +21,15 @@ static EFI_MEMORY_DESCRIPTOR *nth_descriptor(const platform_context_t *platform,
 void memory_init(const platform_context_t *platform) {
     g_region_count = 0;
     g_total_pages = 0;
+    g_boot_services = NULL;
 
-    if (platform == NULL || platform->memory_map.map == NULL || platform->memory_map.descriptor_size == 0) {
+    if (platform == NULL) {
+        return;
+    }
+
+    g_boot_services = platform->boot_services;
+
+    if (platform->memory_map.map == NULL || platform->memory_map.descriptor_size == 0) {
         return;
     }
 
@@ -64,6 +72,15 @@ EFI_PHYSICAL_ADDRESS memory_alloc_pages(UINTN page_count) {
     }
 
     return 0;
+}
+
+BOOLEAN memory_release_pages(EFI_PHYSICAL_ADDRESS address, UINTN page_count) {
+    if (address == 0 || page_count == 0) {
+        return FALSE;
+    }
+
+    (void)g_boot_services;
+    return FALSE;
 }
 
 UINTN memory_total_pages(void) {

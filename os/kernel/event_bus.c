@@ -19,6 +19,8 @@ typedef struct {
 
 static process_event_queue_t g_queues[EVENT_MAX_PROCESSES];
 static channel_event_queue_t g_channel_queues[EVENT_CHANNEL_COUNT];
+static UINT64 g_channel_drop_count;
+static UINT64 g_process_drop_count;
 
 static void copy_packet(event_packet_t *dst, const event_packet_t *src) {
     const UINT8 *src_bytes = (const UINT8 *)src;
@@ -50,6 +52,9 @@ static BOOLEAN queue_pop(event_packet_t *queue, UINTN *head, UINTN *tail, event_
 }
 
 void event_bus_init(void) {
+    g_channel_drop_count = 0;
+    g_process_drop_count = 0;
+
     for (UINTN channel = 0; channel < EVENT_CHANNEL_COUNT; ++channel) {
         g_channel_queues[channel].head = 0;
         g_channel_queues[channel].tail = 0;
@@ -104,6 +109,9 @@ BOOLEAN event_bus_publish(const event_packet_t *packet) {
     if (packet->channel < EVENT_CHANNEL_COUNT) {
         channel_event_queue_t *channel_queue = &g_channel_queues[packet->channel];
         accepted = queue_push(channel_queue->queue, &channel_queue->head, &channel_queue->tail, packet);
+        if (!accepted) {
+            ++g_channel_drop_count;
+        }
     }
 
     if (packet->target_pid == 0) {
@@ -121,6 +129,8 @@ BOOLEAN event_bus_publish(const event_packet_t *packet) {
 
         if (queue_push(g_queues[i].queue, &g_queues[i].head, &g_queues[i].tail, packet)) {
             accepted = TRUE;
+        } else {
+            ++g_process_drop_count;
         }
     }
 
@@ -153,4 +163,12 @@ BOOLEAN event_bus_receive_channel(UINT32 channel, event_packet_t *out_packet) {
 
     channel_event_queue_t *channel_queue = &g_channel_queues[channel];
     return queue_pop(channel_queue->queue, &channel_queue->head, &channel_queue->tail, out_packet);
+}
+
+UINT64 event_bus_channel_drop_count(void) {
+    return g_channel_drop_count;
+}
+
+UINT64 event_bus_process_drop_count(void) {
+    return g_process_drop_count;
 }
