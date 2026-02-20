@@ -92,24 +92,40 @@ SRCS := \
 	kernel/kernel.c \
 	kernel/timer.c \
 	kernel/memory.c \
+	kernel/memory_pages.c \
+	kernel/memory_freelist.c \
 	kernel/vm.c \
+	kernel/vm_builder.c \
 	kernel/platform.c \
 	kernel/diag.c \
 	kernel/panic.c \
 	kernel/interrupts.c \
 	kernel/heap.c \
 	kernel/event_bus.c \
+	kernel/event_packet.c \
+	kernel/event_channel.c \
 	kernel/scheduler.c \
 	kernel/process.c \
 	kernel/syscall.c \
 	kernel/app.c \
+	kernel/app_console_cmd.c \
+	kernel/app_registry.c \
+	kernel/app_instance.c \
 	kernel/vfs.c \
 	drivers/input.c \
 	drivers/keyboard_uefi.c \
 	drivers/mouse_uefi.c \
+	drivers/mouse_ps2.c \
+	drivers/mouse_simple.c \
+	drivers/mouse_absolute.c \
 	graphics/framebuffer.c \
 	graphics/font8x16.c \
 	gui/wm.c \
+	gui/wm_state.c \
+	gui/wm_input.c \
+	gui/wm_render.c \
+	gui/wm_menu.c \
+	gui/wm_utils.c \
 	lib/string.c
 
 OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS))
@@ -216,7 +232,7 @@ debug: all
 clean:
 	rm -rf $(BUILD_DIR) $(TARGET_EFI)
 
-$(BUILD_DIR)/tests/test_event_bus_contract: tests/test_event_bus_contract.c kernel/event_bus.c
+$(BUILD_DIR)/tests/test_event_bus_contract: tests/test_event_bus_contract.c kernel/event_bus.c kernel/event_packet.c kernel/event_channel.c
 	@mkdir -p $(dir $@)
 	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
 

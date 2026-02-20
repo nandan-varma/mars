@@ -1,8 +1,10 @@
 #include "app.h"
 
+#include "app_console_cmd.h"
+#include "app_internal.h"
+
 #include "diag.h"
 #include "event_bus.h"
-#include "heap.h"
 #include "input.h"
 #include "process.h"
 #include "scheduler.h"
@@ -10,30 +12,9 @@
 #include "vfs.h"
 #include "wm.h"
 
-#define MAX_APPS 16
-#define APP_EVENTS_PER_STEP 12
-#define APP_CONTENT_CHARS 512
-#define APP_INPUT_CHARS 96
 #define APP_MAX_TASK_LINES 6
 #define APP_MAX_LOG_LINES 8
 
-typedef struct {
-    app_manifest_t manifest;
-    UINT32 pid;
-    UINT32 window_id;
-    UINT64 ticks;
-    CHAR16 content[APP_CONTENT_CHARS];
-    UINTN content_len;
-    CHAR16 history[APP_CONTENT_CHARS];
-    UINTN history_len;
-    CHAR16 input_line[APP_INPUT_CHARS];
-    UINTN input_len;
-} app_instance_t;
-
-static app_manifest_t g_manifests[MAX_APPS];
-static UINTN g_manifest_count;
-static app_instance_t *g_instances[MAX_APPS];
-static UINTN g_instance_count;
 static UINT32 g_app_manager_pid;
 
 static void copy_chars(CHAR16 *dst, const CHAR16 *src, UINTN max_chars) {
@@ -60,10 +41,6 @@ static BOOLEAN equals_chars(const CHAR16 *a, const CHAR16 *b) {
         }
         ++i;
     }
-}
-
-static BOOLEAN is_space(CHAR16 ch) {
-    return ch == L' ' || ch == L'\t' || ch == L'\r' || ch == L'\n';
 }
 
 static UINTN text_length(const CHAR16 *text, UINTN max_chars) {
@@ -400,226 +377,6 @@ static void render_logs_content(app_instance_t *instance) {
     }
 }
 
-static void files_ls(app_instance_t *instance) {
-    if (instance == NULL) {
-        return;
-    }
-
-    history_append_line(instance, L"Entries:");
-    const CHAR16 *paths[] = {
-        L"/apps/shell.manifest",
-        L"/apps/files.manifest",
-        L"/apps/term.manifest"
-    };
-
-    for (UINTN i = 0; i < (sizeof(paths) / sizeof(paths[0])); ++i) {
-        CHAR16 line[96];
-        line[0] = 0;
-        copy_append_text(line, 96, vfs_exists(paths[i]) ? L"- " : L"? ");
-        copy_append_text(line, 96, paths[i]);
-        history_append_line(instance, line);
-    }
-}
-
-static void files_cat(app_instance_t *instance, const CHAR16 *path) {
-    if (instance == NULL || path == NULL || path[0] == 0) {
-        history_append_line(instance, L"cat: missing path");
-        return;
-    }
-
-    UINT8 bytes[80];
-    UINTN read = vfs_read(path, bytes, 79);
-    if (read == 0) {
-        history_append_line(instance, L"cat: file not found");
-        return;
-    }
-
-    CHAR16 line[96];
-    line[0] = 0;
-    UINTN line_len = 0;
-    for (UINTN i = 0; i < read && i < 79; ++i) {
-        CHAR16 ch = (CHAR16)bytes[i];
-        if (ch == L'\n' || ch == L'\r') {
-            ch = L' ';
-        }
-        buffer_append_char(line, 96, &line_len, ch);
-    }
-    history_append_line(instance, line);
-}
-
-static void parse_command(const CHAR16 *input, CHAR16 *cmd, UINTN cmd_max, CHAR16 *arg, UINTN arg_max) {
-    if (cmd != NULL && cmd_max > 0) {
-        cmd[0] = 0;
-    }
-    if (arg != NULL && arg_max > 0) {
-        arg[0] = 0;
-    }
-    if (input == NULL || cmd == NULL || cmd_max == 0) {
-        return;
-    }
-
-    UINTN i = 0;
-    while (input[i] != 0 && is_space(input[i])) {
-        ++i;
-    }
-
-    UINTN c = 0;
-    while (input[i] != 0 && !is_space(input[i]) && c + 1 < cmd_max) {
-        cmd[c++] = input[i++];
-    }
-    cmd[c] = 0;
-
-    while (input[i] != 0 && is_space(input[i])) {
-        ++i;
-    }
-
-    if (arg == NULL || arg_max == 0) {
-        return;
-    }
-
-    UINTN a = 0;
-    while (input[i] != 0 && a + 1 < arg_max) {
-        arg[a++] = input[i++];
-    }
-    arg[a] = 0;
-}
-
-static void execute_shell_like(app_instance_t *instance) {
-    if (instance == NULL) {
-        return;
-    }
-
-    CHAR16 cmd[24];
-    CHAR16 arg[64];
-    parse_command(instance->input_line, cmd, 24, arg, 64);
-
-    if (cmd[0] == 0) {
-        return;
-    }
-
-    if (equals_chars(cmd, L"help")) {
-        if (equals_chars(instance->manifest.id, L"files")) {
-            history_append_line(instance, L"help | ls | cat <path> | exists <path> | clear");
-        } else if (equals_chars(instance->manifest.id, L"settings")) {
-            history_append_line(instance, L"help | status | debug on|off|toggle | clear");
-        } else {
-            history_append_line(instance, L"help | clear | tick | mem | ps | launch <app>");
-            history_append_line(instance, L"apps | ls | cat <path> | echo <text>");
-        }
-        return;
-    }
-
-    if (equals_chars(cmd, L"clear")) {
-        instance->history[0] = 0;
-        instance->history_len = 0;
-        return;
-    }
-
-    if (equals_chars(cmd, L"tick")) {
-        CHAR16 line[64];
-        copy_text(line, L"tick=", 64);
-        append_u64_text(line, 64, timer_ticks());
-        history_append_line(instance, line);
-        return;
-    }
-
-    if (equals_chars(cmd, L"mem")) {
-        CHAR16 line[96];
-        line[0] = 0;
-        copy_append_text(line, 96, L"heap ");
-        append_u64_text(line, 96, heap_used_bytes() / 1024);
-        copy_append_text(line, 96, L"/");
-        append_u64_text(line, 96, heap_total_bytes() / 1024);
-        copy_append_text(line, 96, L" KB");
-        history_append_line(instance, line);
-        return;
-    }
-
-    if (equals_chars(cmd, L"ps")) {
-        CHAR16 line[96];
-        line[0] = 0;
-        copy_append_text(line, 96, L"proc=");
-        append_u64_text(line, 96, process_running_count());
-        copy_append_text(line, 96, L" task=");
-        append_u64_text(line, 96, scheduler_task_count());
-        history_append_line(instance, line);
-        return;
-    }
-
-    if (equals_chars(cmd, L"apps")) {
-        history_append_line(instance, L"shell files term settings tasks logs");
-        return;
-    }
-
-    if (equals_chars(cmd, L"echo")) {
-        history_append_line(instance, arg[0] == 0 ? L"" : arg);
-        return;
-    }
-
-    if (equals_chars(cmd, L"launch") || equals_chars(cmd, L"open")) {
-        if (arg[0] == 0) {
-            history_append_line(instance, L"launch: missing app id");
-        } else if (app_launch(arg)) {
-            history_append_line(instance, L"launch: ok");
-        } else {
-            history_append_line(instance, L"launch: failed");
-        }
-        return;
-    }
-
-    if (equals_chars(cmd, L"ls")) {
-        files_ls(instance);
-        return;
-    }
-
-    if (equals_chars(cmd, L"cat")) {
-        files_cat(instance, arg);
-        return;
-    }
-
-    if (equals_chars(cmd, L"exists")) {
-        CHAR16 line[96];
-        line[0] = 0;
-        if (arg[0] == 0) {
-            history_append_line(instance, L"exists: missing path");
-            return;
-        }
-        copy_append_text(line, 96, vfs_exists(arg) ? L"yes " : L"no ");
-        copy_append_text(line, 96, arg);
-        history_append_line(instance, line);
-        return;
-    }
-
-    if (equals_chars(instance->manifest.id, L"settings")) {
-        if (equals_chars(cmd, L"status")) {
-            history_append_line(instance, wm_debug_overlay_enabled() ? L"debug overlay: on" : L"debug overlay: off");
-            return;
-        }
-
-        if (equals_chars(cmd, L"debug")) {
-            if (equals_chars(arg, L"on")) {
-                wm_set_debug_overlay(TRUE);
-                history_append_line(instance, L"debug overlay enabled");
-                return;
-            }
-            if (equals_chars(arg, L"off")) {
-                wm_set_debug_overlay(FALSE);
-                history_append_line(instance, L"debug overlay disabled");
-                return;
-            }
-            if (equals_chars(arg, L"toggle")) {
-                wm_set_debug_overlay(!wm_debug_overlay_enabled());
-                history_append_line(instance, wm_debug_overlay_enabled() ? L"debug overlay enabled" : L"debug overlay disabled");
-                return;
-            }
-            history_append_line(instance, L"debug on|off|toggle");
-            return;
-        }
-    }
-
-    history_append_line(instance, L"unknown command");
-}
-
 static void set_default_content(app_instance_t *instance) {
     if (instance == NULL) {
         return;
@@ -680,7 +437,7 @@ static void handle_app_input(app_instance_t *instance, const input_event_t *inpu
 
     if (ch == L'\r') {
         history_append_prompt_line(instance);
-        execute_shell_like(instance);
+        app_execute_console_command(instance);
         reset_input(instance);
         compose_console_view(instance);
         return;
@@ -781,95 +538,18 @@ static BOOLEAN app_manager_task(void *context) {
 }
 
 void app_framework_init(void) {
-    g_manifest_count = 0;
-    g_instance_count = 0;
+    app_registry_init();
+    app_instance_init();
     g_app_manager_pid = 0;
-    for (UINTN i = 0; i < MAX_APPS; ++i) {
-        g_instances[i] = NULL;
-    }
-
     g_app_manager_pid = process_create_kernel(L"app-manager", app_manager_task, NULL, 1, CAP_SYSTEM);
 }
 
 BOOLEAN app_register(const app_manifest_t *manifest) {
-    if (manifest == NULL || g_manifest_count >= MAX_APPS) {
-        return FALSE;
-    }
-
-    g_manifests[g_manifest_count] = *manifest;
-    ++g_manifest_count;
-    return TRUE;
+    return app_registry_register(manifest);
 }
 
 BOOLEAN app_launch(const CHAR16 *id) {
-    if (id == NULL) {
-        return FALSE;
-    }
-
-    if (g_instance_count >= MAX_APPS) {
-        return FALSE;
-    }
-
-    for (UINTN i = 0; i < g_instance_count; ++i) {
-        app_instance_t *instance = g_instances[i];
-        if (instance == NULL) {
-            continue;
-        }
-
-        if (!equals_chars(instance->manifest.id, id)) {
-            continue;
-        }
-
-        if (process_is_running(instance->pid)) {
-            return wm_focus_window(instance->window_id);
-        }
-    }
-
-    for (UINTN i = 0; i < g_manifest_count; ++i) {
-        if (!equals_chars(g_manifests[i].id, id)) {
-            continue;
-        }
-
-        app_instance_t *instance = (app_instance_t *)heap_alloc(sizeof(app_instance_t));
-        if (instance == NULL) {
-            return FALSE;
-        }
-
-        instance->manifest = g_manifests[i];
-        instance->ticks = 0;
-        instance->content[0] = 0;
-        instance->content_len = 0;
-        instance->history[0] = 0;
-        instance->history_len = 0;
-        instance->input_line[0] = 0;
-        instance->input_len = 0;
-        instance->pid = process_create_kernel(instance->manifest.title, app_task_step, instance, 1, instance->manifest.capabilities);
-        if (instance->pid == 0) {
-            return FALSE;
-        }
-
-        instance->window_id = wm_create_window(
-            instance->pid,
-            instance->manifest.title,
-            instance->manifest.start_x,
-            instance->manifest.start_y,
-            instance->manifest.width,
-            instance->manifest.height
-        );
-        if (instance->window_id == 0) {
-            process_exit(instance->pid, -2);
-            return FALSE;
-        }
-
-        set_default_content(instance);
-        (void)wm_set_window_content(instance->window_id, instance->content);
-
-        g_instances[g_instance_count++] = instance;
-
-        return instance->window_id != 0;
-    }
-
-    return FALSE;
+    return app_instance_launch(id, app_task_step, set_default_content);
 }
 
 void app_launch_core_suite(void) {

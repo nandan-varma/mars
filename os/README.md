@@ -5,9 +5,9 @@
 - **Boot model**: UEFI `BOOTX64.EFI` with **Boot Services ON** runtime contract.
 - **Kernel model**: single-address-space cooperative multitasking with process/task abstractions.
 - **Graphics**: CPU software rendering with framebuffer present.
-- **Desktop**: WM-based path (`gui/wm.c`) with overlapping windows, taskbar, start menu.
+- **Desktop**: WM façade (`gui/wm.c`) over split modules (`wm_state.c`, `wm_input.c`, `wm_render.c`, `wm_menu.c`) with overlapping windows, taskbar, start menu.
 - **Input**: event-bus routed keyboard/mouse via UEFI + bounded PS/2 fallback.
-- **Scheduler**: cooperative round-robin (no preemption; task priority is stored metadata).
+- **Scheduler**: cooperative round-robin with optional timer-preemptive mode toggle.
 
 ### Intentional scope limits
 - No hardware process isolation yet (prototype capabilities only).
@@ -134,8 +134,23 @@ Notes:
 - `service-supervisor`: relaunches managed services when they terminate.
 - `app-manager`: consumes `EVENT_CHANNEL_SYSTEM` launch requests and spawns app instances.
 
+## Internal module map (behavior-preserving seams)
+- WM: `gui/wm.c` (façade), `gui/wm_state.c`, `gui/wm_input.c`, `gui/wm_render.c`, `gui/wm_menu.c`, `gui/wm_utils.c`.
+- App framework: `kernel/app.c` (façade/loop), `kernel/app_console_cmd.c` (command table dispatcher), `kernel/app_registry.c`, `kernel/app_instance.c`.
+- Event bus: `kernel/event_bus.c` (public API), `kernel/event_packet.c`, `kernel/event_channel.c`.
+- Mouse driver: `drivers/mouse_uefi.c` (protocol discovery + priority orchestration), `drivers/mouse_ps2.c`, `drivers/mouse_absolute.c`, `drivers/mouse_simple.c`.
+- Memory/VM: `kernel/memory.c` (public allocator API), `kernel/memory_pages.c`, `kernel/memory_freelist.c`, `kernel/vm.c`, `kernel/vm_builder.c`.
+- Kernel boot: `kernel/kernel.c` now runs table-driven staged initialization with preserved stage markers.
+
+## Invariants
+- Keep public headers stable: `include/wm.h`, `include/app.h`, `include/event_bus.h`, `include/memory.h`, `include/vm.h`.
+- Preserve event-bus queue/drop semantics and bounded capacities.
+- Preserve mouse source priority: PS/2 → Absolute Pointer → Simple Pointer.
+- Preserve kernel bring-up ordering and diag stage values.
+- Preserve dirty/partial present behavior in WM clock-only redraw path.
+
 ## Current Limitations
-- `memory_release_pages` is currently a stub and does not reclaim pages.
+- Single-address-space prototype remains cooperative and capability-gated, not hard-isolated.
 - Process/task tables are bounded (`MAX_PROCESSES`/`MAX_TASKS`) and rely on slot reuse.
 
 ## Testing Strategy

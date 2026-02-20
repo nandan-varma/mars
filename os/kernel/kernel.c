@@ -104,6 +104,124 @@ static BOOLEAN supervisor_task(void *context) {
     return TRUE;
 }
 
+typedef BOOLEAN (*kernel_stage_fn)(const platform_context_t *platform);
+
+typedef struct {
+    UINT32 stage;
+    kernel_stage_fn fn;
+} kernel_stage_step_t;
+
+static BOOLEAN stage_diag_init(const platform_context_t *platform) {
+    (void)platform;
+    diag_init();
+    return TRUE;
+}
+
+static BOOLEAN stage_interrupts_init(const platform_context_t *platform) {
+    (void)platform;
+    interrupts_init();
+    return TRUE;
+}
+
+static BOOLEAN stage_event_bus_init(const platform_context_t *platform) {
+    (void)platform;
+    event_bus_init();
+    (void)event_bus_set_channel_policy(EVENT_CHANNEL_INPUT, EVENT_BACKPRESSURE_DROP_OLDEST);
+    (void)event_bus_set_channel_policy(EVENT_CHANNEL_INPUT_KEYBOARD, EVENT_BACKPRESSURE_DROP_OLDEST);
+    (void)event_bus_set_channel_policy(EVENT_CHANNEL_SYSTEM, EVENT_BACKPRESSURE_DROP_NEWEST);
+    (void)event_bus_set_channel_policy(EVENT_CHANNEL_APP, EVENT_BACKPRESSURE_DROP_NEWEST);
+    return TRUE;
+}
+
+static BOOLEAN stage_timer_init(const platform_context_t *platform) {
+    (void)platform;
+    timer_init(1000);
+    return TRUE;
+}
+
+static BOOLEAN stage_scheduler_process_init(const platform_context_t *platform) {
+    (void)platform;
+    scheduler_init();
+    scheduler_set_timer_preemptive(SCHED_TIMER_PREEMPTIVE ? TRUE : FALSE);
+    process_init();
+    return TRUE;
+}
+
+static BOOLEAN stage_memory_init(const platform_context_t *platform) {
+    memory_init(platform);
+    return TRUE;
+}
+
+static BOOLEAN stage_framebuffer_init(const platform_context_t *platform) {
+    framebuffer_init(platform);
+    return TRUE;
+}
+
+static BOOLEAN stage_vm_init(const platform_context_t *platform) {
+    vm_init(platform);
+    return TRUE;
+}
+
+static BOOLEAN stage_heap_init(const platform_context_t *platform) {
+    (void)platform;
+    heap_init(512);
+    return TRUE;
+}
+
+static BOOLEAN stage_input_init(const platform_context_t *platform) {
+    input_init(platform, platform->framebuffer.width, platform->framebuffer.height);
+    return TRUE;
+}
+
+static BOOLEAN stage_wm_init(const platform_context_t *platform) {
+    wm_init(platform->framebuffer.width, platform->framebuffer.height);
+    return TRUE;
+}
+
+static BOOLEAN stage_vfs_init(const platform_context_t *platform) {
+    (void)platform;
+    vfs_init();
+    vfs_block_device_t boot_device;
+    boot_device.block_size = 512;
+    boot_device.block_count = 16384;
+    boot_device.read_only = TRUE;
+    vfs_mount_boot_device(boot_device);
+    return TRUE;
+}
+
+static BOOLEAN stage_services_and_apps(const platform_context_t *platform) {
+    (void)platform;
+    for (UINTN i = 0; i < (sizeof(g_managed_processes) / sizeof(g_managed_processes[0])); ++i) {
+        (void)spawn_managed_process(&g_managed_processes[i]);
+    }
+
+    UINT32 supervisor_pid = process_create_kernel(L"service-supervisor", supervisor_task, NULL, 1, CAP_SYSTEM);
+    (void)supervisor_pid;
+
+    app_framework_init();
+    app_launch_core_suite();
+    return TRUE;
+}
+
+static BOOLEAN run_stage_steps(const platform_context_t *platform, const kernel_stage_step_t *steps, UINTN count) {
+    if (platform == NULL || steps == NULL) {
+        return FALSE;
+    }
+
+    for (UINTN i = 0; i < count; ++i) {
+        if (steps[i].fn == NULL) {
+            return FALSE;
+        }
+
+        if (!steps[i].fn(platform)) {
+            return FALSE;
+        }
+        diag_set_stage(steps[i].stage);
+    }
+
+    return TRUE;
+}
+
 void kernel_main(const boot_info_t *boot_info) {
     if (boot_info == NULL) {
         return;
@@ -115,59 +233,36 @@ void kernel_main(const boot_info_t *boot_info) {
         return;
     }
 
-    diag_init();
-    diag_set_stage(10);
-    interrupts_init();
-    diag_set_stage(20);
-    event_bus_init();
-    (void)event_bus_set_channel_policy(EVENT_CHANNEL_INPUT, EVENT_BACKPRESSURE_DROP_OLDEST);
-    (void)event_bus_set_channel_policy(EVENT_CHANNEL_INPUT_KEYBOARD, EVENT_BACKPRESSURE_DROP_OLDEST);
-    (void)event_bus_set_channel_policy(EVENT_CHANNEL_SYSTEM, EVENT_BACKPRESSURE_DROP_NEWEST);
-    (void)event_bus_set_channel_policy(EVENT_CHANNEL_APP, EVENT_BACKPRESSURE_DROP_NEWEST);
-    diag_set_stage(30);
-    timer_init(1000);
-    diag_set_stage(40);
-    scheduler_init();
-    scheduler_set_timer_preemptive(SCHED_TIMER_PREEMPTIVE ? TRUE : FALSE);
-    process_init();
-    diag_set_stage(50);
+    static const kernel_stage_step_t pre_sys_steps[] = {
+        { 10, stage_diag_init },
+        { 20, stage_interrupts_init },
+        { 30, stage_event_bus_init },
+        { 40, stage_timer_init },
+        { 50, stage_scheduler_process_init },
+        { 60, stage_memory_init },
+        { 70, stage_framebuffer_init },
+        { 80, stage_vm_init },
+        { 90, stage_heap_init }
+    };
 
-    memory_init(platform);
-    diag_set_stage(60);
-    framebuffer_init(platform);
-    diag_set_stage(70);
-    vm_init(platform);
-    diag_set_stage(80);
-    heap_init(512);
-    diag_set_stage(90);
+    if (!run_stage_steps(platform, pre_sys_steps, sizeof(pre_sys_steps) / sizeof(pre_sys_steps[0]))) {
+        return;
+    }
 
     syscall_init();
     (void)interrupts_register(IRQ_VECTOR_TIMER, on_timer_interrupt);
     (void)interrupts_register(IRQ_VECTOR_SYSCALL, on_syscall_interrupt);
 
-    input_init(platform, platform->framebuffer.width, platform->framebuffer.height);
-    diag_set_stage(100);
-    wm_init(platform->framebuffer.width, platform->framebuffer.height);
-    diag_set_stage(110);
+    static const kernel_stage_step_t post_sys_steps[] = {
+        { 100, stage_input_init },
+        { 110, stage_wm_init },
+        { 120, stage_vfs_init },
+        { 200, stage_services_and_apps }
+    };
 
-    vfs_init();
-    vfs_block_device_t boot_device;
-    boot_device.block_size = 512;
-    boot_device.block_count = 16384;
-    boot_device.read_only = TRUE;
-    vfs_mount_boot_device(boot_device);
-    diag_set_stage(120);
-
-    for (UINTN i = 0; i < (sizeof(g_managed_processes) / sizeof(g_managed_processes[0])); ++i) {
-        (void)spawn_managed_process(&g_managed_processes[i]);
+    if (!run_stage_steps(platform, post_sys_steps, sizeof(post_sys_steps) / sizeof(post_sys_steps[0]))) {
+        return;
     }
-
-    UINT32 supervisor_pid = process_create_kernel(L"service-supervisor", supervisor_task, NULL, 1, CAP_SYSTEM);
-    (void)supervisor_pid;
-
-    app_framework_init();
-    app_launch_core_suite();
-    diag_set_stage(200);
 
     scheduler_run();
 }
