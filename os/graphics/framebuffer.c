@@ -9,6 +9,12 @@ static UINT32 *g_frontbuffer;
 static UINT32 *g_backbuffer;
 
 static UINTN backbuffer_pixel_offset(UINT32 x, UINT32 y) {
+    // SECURITY FIX #3: Prevent integer overflow in y * width calculation
+    // Check if y * width would overflow by testing if width > max_value / y
+    // Since UINTN is 64-bit, max value is 2^64-1
+    if (g_framebuffer.width > 0 && y > (18446744073709551615ULL / g_framebuffer.width)) {
+        return 18446744073709551615ULL;  // Invalid offset, caller should reject
+    }
     return (UINTN)y * g_framebuffer.width + (UINTN)x;
 }
 
@@ -22,6 +28,13 @@ void framebuffer_init(const platform_context_t *platform) {
     g_framebuffer.width = platform->framebuffer.width;
     g_framebuffer.height = platform->framebuffer.height;
     g_framebuffer.pitch = platform->framebuffer.pixels_per_scanline;
+
+    // SECURITY FIX #16: Reject zero dimensions to prevent division by zero
+    if (g_framebuffer.width == 0 || g_framebuffer.height == 0 || g_framebuffer.pitch == 0) {
+        g_frontbuffer = NULL;
+        g_framebuffer.base = NULL;
+        return;
+    }
 
     UINTN backbuffer_bytes = (UINTN)g_framebuffer.width * (UINTN)g_framebuffer.height * sizeof(UINT32);
     UINTN pages = (backbuffer_bytes + PAGE_SIZE - 1) / PAGE_SIZE;
@@ -45,6 +58,13 @@ void drawPixel(INT32 x, INT32 y, UINT32 color) {
     UINTN offset = g_backbuffer != NULL
         ? backbuffer_pixel_offset((UINT32)x, (UINT32)y)
         : (UINTN)y * g_framebuffer.pitch + (UINTN)x;
+    
+    // SECURITY FIX: Check if offset calculation resulted in overflow
+    // Invalid offset (max uint64) indicates an overflow occurred
+    if (offset == 18446744073709551615ULL) {
+        return;
+    }
+    
     g_framebuffer.base[offset] = color;
 }
 
@@ -79,6 +99,12 @@ void clearScreen(UINT32 color) {
 void framebuffer_present(void) {
     if (g_backbuffer == NULL || g_frontbuffer == NULL) {
         return;
+    }
+
+    // SECURITY FIX #2: Validate pitch doesn't cause out-of-bounds writes
+    // Pitch can be different from width on some hardware
+    if (g_framebuffer.pitch < g_framebuffer.width) {
+        return;  // Invalid pitch configuration
     }
 
     for (UINT32 y = 0; y < g_framebuffer.height; ++y) {

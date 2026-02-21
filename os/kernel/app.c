@@ -462,7 +462,9 @@ static BOOLEAN app_task_step(void *context) {
     event_packet_t packet;
     UINTN processed = 0;
     while (processed < APP_EVENTS_PER_STEP && event_bus_receive(instance->pid, &packet)) {
-        if (packet.code == EVENT_CODE_APP_INPUT && packet.payload_size >= sizeof(input_event_t)) {
+        // SECURITY FIX #6: Validate payload size matches expected input event size
+        // Using >= allows reading uninitialized bytes from the payload buffer
+        if (packet.code == EVENT_CODE_APP_INPUT && packet.payload_size == sizeof(input_event_t)) {
             input_event_t input;
             UINT8 *dst = (UINT8 *)&input;
             for (UINTN i = 0; i < sizeof(input_event_t); ++i) {

@@ -64,6 +64,12 @@ static void app_trim_front(CHAR16 *buffer, UINTN max_chars, UINTN *len_io, UINTN
             buffer[write++] = buffer[read];
         }
         len = write;
+        
+        // SECURITY FIX #9: Ensure we don't write past buffer bounds
+        // If len >= max_chars, we cannot write the null terminator
+        if (len >= max_chars) {
+            len = max_chars - 1;
+        }
         buffer[len] = 0;
     }
 
@@ -83,7 +89,13 @@ static void app_append_text(CHAR16 *buffer, UINTN max_chars, UINTN *len_io, cons
     while (len + 1 < max_chars && text[i] != 0) {
         buffer[len++] = text[i++];
     }
-    buffer[len] = 0;
+    
+    // SECURITY FIX: Ensure null terminator doesn't overflow
+    if (len < max_chars) {
+        buffer[len] = 0;
+    } else if (max_chars > 0) {
+        buffer[max_chars - 1] = 0;
+    }
     *len_io = len;
 }
 
@@ -96,7 +108,9 @@ static void app_append_char(CHAR16 *buffer, UINTN max_chars, UINTN *len_io, CHAR
     app_trim_front(buffer, max_chars, &len, 1);
     if (len + 1 < max_chars) {
         buffer[len++] = ch;
-        buffer[len] = 0;
+        if (len < max_chars) {
+            buffer[len] = 0;
+        }
     }
     *len_io = len;
 }

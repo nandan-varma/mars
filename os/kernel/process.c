@@ -62,6 +62,13 @@ UINT32 process_create_kernel(const CHAR16 *name, task_entry_t entry, void *conte
     }
 
     process->pid = g_next_pid++;
+    
+    // SECURITY FIX #5: Prevent PID wraparound to 0 (which is invalid/kernel-reserved)
+    // If next_pid wraps to 0, jump to 1 instead
+    if (g_next_pid == 0) {
+        g_next_pid = 1;
+    }
+    
     process->state = PROCESS_RUNNING;
     process->capabilities = capabilities;
     process->exit_code = 0;

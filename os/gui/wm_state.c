@@ -199,6 +199,12 @@ BOOLEAN wm_set_window_content(UINT32 window_id, const CHAR16 *text) {
         return FALSE;
     }
 
+    // SECURITY FIX #7: Re-validate window ID and index after lookup
+    // Window could have closed between wm_window_index_by_id() and here
+    if (index >= WM_MAX_WINDOWS || state->windows[index].id != window_id) {
+        return FALSE;
+    }
+
     os_strcpy16(state->content[index], text, WM_CONTENT_CHARS);
     state->windows[index].invalidated = TRUE;
     state->dirty = TRUE;

@@ -8,9 +8,12 @@
 #define MAX_FREE_BLOCKS 128
 
 typedef struct free_block {
+    UINTN magic;  // Magic number to detect corrupted/invalid blocks
     UINTN size;
     struct free_block *next;
 } free_block_t;
+
+#define FREE_BLOCK_MAGIC 0xDEADBEEF
 
 static UINT8 *g_heap_base;
 static UINTN g_heap_total;
@@ -53,6 +56,7 @@ void heap_init(UINTN initial_pages) {
     g_heap_used = 0;
 
     free_block_t *initial_block = (free_block_t *)g_heap_base;
+    initial_block->magic = FREE_BLOCK_MAGIC;  // Initialize magic
     initial_block->size = total - sizeof(free_block_t);
     initial_block->next = NULL;
     g_free_list = initial_block;
@@ -76,6 +80,7 @@ void *heap_alloc(UINTN size) {
 
             if (remaining >= sizeof(free_block_t) + HEAP_ALIGNMENT) {
                 free_block_t *new_block = (free_block_t *)((UINT8 *)block + sizeof(free_block_t) + size);
+                new_block->magic = FREE_BLOCK_MAGIC;  // Initialize magic
                 new_block->size = remaining - sizeof(free_block_t);
                 new_block->next = block->next;
                 *prev = new_block;
@@ -95,12 +100,20 @@ void *heap_alloc(UINTN size) {
     UINTN needed = align_up(size + sizeof(free_block_t), PAGE_SIZE);
     UINTN current_aligned = align_up(g_heap_used + sizeof(free_block_t), PAGE_SIZE);
 
+    // SECURITY FIX #1: Prevent overflow when computing current_aligned + needed
+    // If either operand is too large, the addition would wrap around
+    if (needed > g_heap_total || current_aligned > g_heap_total - needed) {
+        spinlock_release(&g_heap_lock);
+        return NULL;
+    }
+
     if (current_aligned + needed > g_heap_total) {
         spinlock_release(&g_heap_lock);
         return NULL;
     }
 
-    free_block_t *new_block = (free_block_t *)(g_heap_base + current_aligned);
+     free_block_t *new_block = (free_block_t *)(g_heap_base + current_aligned);
+    new_block->magic = FREE_BLOCK_MAGIC;  // Initialize magic
     new_block->size = needed - sizeof(free_block_t);
     new_block->next = g_free_list;
     g_free_list = new_block;
@@ -122,6 +135,12 @@ void heap_free(void *ptr) {
     }
 
     free_block_t *block = (free_block_t *)(ptr_byte - sizeof(free_block_t));
+
+    // SECURITY FIX #4: Validate magic number before using block metadata
+    // This detects corrupted or invalid free blocks
+    if (block->magic != FREE_BLOCK_MAGIC) {
+        return;  // Block is corrupted, silently ignore
+    }
 
     spinlock_acquire(&g_heap_lock);
 

@@ -33,6 +33,13 @@ void memory_pages_add_region(EFI_PHYSICAL_ADDRESS base, UINTN pages) {
 
     for (UINTN i = 0; i < g_region_count; ++i) {
         EFI_PHYSICAL_ADDRESS existing_end = g_regions[i].base + (EFI_PHYSICAL_ADDRESS)g_regions[i].pages * PAGE_SIZE;
+        
+        // SECURITY FIX #8: Check for overflow when computing existing_end
+        // If overflow occurs, existing_end < base, making the overlap check unreliable
+        if (existing_end < g_regions[i].base) {
+            continue;  // Skip this corrupted region
+        }
+        
         if (!(end <= g_regions[i].base || base >= existing_end)) {
             return;
         }
