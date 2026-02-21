@@ -1,19 +1,19 @@
 // ============================================================================
 // File Manager Application
 // ============================================================================
-// Demonstrates List component usage with file browsing simulation
-// Uses the SDK layout system and app framework
+// Demonstrates file browsing with list of sample files
 
-#include "app.h"
-#include "sdk/sdk_app.h"
-#include "sdk/sdk_layout.h"
-#include "sdk/sdk_ui.h"
+#include "uefi.h"
+#include "sdk/sdk_core.h"
 #include "sdk/sdk_graphics.h"
+#include "sdk/sdk_input.h"
+#include "sdk/sdk_ui.h"
 
 // File manager state
 typedef struct {
     CHAR16 current_path[256];
     UINTN file_count;
+    INT32 selected_index;
     struct {
         CHAR16 name[64];
         BOOLEAN is_directory;
@@ -21,146 +21,133 @@ typedef struct {
     } files[32];
 } file_manager_state_t;
 
+static file_manager_state_t *g_fm_state = NULL;
+
 // Initialize file list with sample files
 static void file_manager_init_files(file_manager_state_t *state) {
     state->file_count = 0;
+    state->selected_index = 0;
     
     // Add some sample files
-    os_string_copy_chars(state->files[state->file_count].name, 64, L"[..]");
+    os_strcpy16(state->files[state->file_count].name, L"[..]");
     state->files[state->file_count].is_directory = TRUE;
     state->files[state->file_count].size = 0;
     state->file_count++;
     
-    os_string_copy_chars(state->files[state->file_count].name, 64, L"Documents");
+    os_strcpy16(state->files[state->file_count].name, L"Documents");
     state->files[state->file_count].is_directory = TRUE;
     state->files[state->file_count].size = 0;
     state->file_count++;
     
-    os_string_copy_chars(state->files[state->file_count].name, 64, L"Photos");
+    os_strcpy16(state->files[state->file_count].name, L"Photos");
     state->files[state->file_count].is_directory = TRUE;
     state->files[state->file_count].size = 0;
     state->file_count++;
     
-    os_string_copy_chars(state->files[state->file_count].name, 64, L"readme.txt");
+    os_strcpy16(state->files[state->file_count].name, L"readme.txt");
     state->files[state->file_count].is_directory = FALSE;
     state->files[state->file_count].size = 1024;
     state->file_count++;
     
-    os_string_copy_chars(state->files[state->file_count].name, 64, L"config.sys");
+    os_strcpy16(state->files[state->file_count].name, L"config.sys");
     state->files[state->file_count].is_directory = FALSE;
     state->files[state->file_count].size = 512;
     state->file_count++;
     
-    os_string_copy_chars(state->files[state->file_count].name, 64, L"data.bin");
+    os_strcpy16(state->files[state->file_count].name, L"data.bin");
     state->files[state->file_count].is_directory = FALSE;
     state->files[state->file_count].size = 4096;
     state->file_count++;
 }
 
-// Application initialization
-static void file_manager_on_init(sdk_app_t *app) {
-    file_manager_state_t *state = (file_manager_state_t*)heap_alloc(sizeof(file_manager_state_t));
-    if (state == NULL) {
+BOOLEAN file_manager_init(UINT32 window_id) {
+    g_fm_state = (file_manager_state_t *)heap_alloc(sizeof(file_manager_state_t));
+    if (g_fm_state == NULL) {
+        return FALSE;
+    }
+    
+    os_strcpy16(g_fm_state->current_path, L"FS0:\\");
+    file_manager_init_files(g_fm_state);
+    
+    return TRUE;
+}
+
+void file_manager_render(void) {
+    if (g_fm_state == NULL) {
         return;
     }
     
-    os_string_copy_chars(state->current_path, 256, L"FS0:\\");
-    file_manager_init_files(state);
-    sdk_app_set_user_data(app, state);
+    sdk_graphics_clear(SDK_COLOR_BG_LIGHT);
+    sdk_graphics_text(10, 10, L"File Manager", SDK_COLOR_TEXT_PRIMARY, SDK_COLOR_BG_LIGHT);
     
-    // Get root container and set layout
-    sdk_container_t *container = sdk_app_get_container(app);
-    if (container == NULL) {
-        return;
-    }
+    // Draw current path
+    sdk_graphics_text(10, 35, L"Path: ", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
+    sdk_graphics_text(70, 35, g_fm_state->current_path, SDK_COLOR_TEXT_PRIMARY, SDK_COLOR_BG_LIGHT);
     
-    sdk_container_set_layout(container, SDK_LAYOUT_VERTICAL, 10, 10);
-    
-    // Title label
-    sdk_component_t *title = sdk_label_create(10, 10, 1004, 32);
-    if (title != NULL) {
-        sdk_label_set_text(title, L"File Manager");
-        sdk_label_set_colors(title, SDK_COLOR_WHITE, SDK_BUTTON_COLOR_NORMAL);
-        sdk_container_add_component(container, title);
-    }
-    
-    // Path label
-    sdk_component_t *path_label = sdk_label_create(10, 50, 1004, 24);
-    if (path_label != NULL) {
-        sdk_label_set_text(path_label, state->current_path);
-        sdk_container_add_component(container, path_label);
-    }
-    
-    // File list
-    sdk_component_t *file_list = sdk_list_create(10, 80, 1004, 600);
-    if (file_list != NULL) {
-        for (UINTN i = 0; i < state->file_count && i < 32; i++) {
-            sdk_list_item_t item;
-            os_string_copy_chars(item.label, 64, state->files[i].name);
-            item.selectable = TRUE;
-            sdk_list_add_item(file_list, item);
+    // Draw file list
+    INT32 y = 65;
+    for (UINTN i = 0; i < g_fm_state->file_count && i < 20; i++) {
+        UINT32 bg_color = (i == g_fm_state->selected_index) ? SDK_COLOR_BUTTON_HOVER : SDK_COLOR_BG_LIGHT;
+        UINT32 fg_color = (i == g_fm_state->selected_index) ? SDK_COLOR_WHITE : SDK_COLOR_TEXT_PRIMARY;
+        
+        // Draw selection background
+        if (i == g_fm_state->selected_index) {
+            sdk_graphics_rect(10, y - 2, 500, 18, bg_color);
         }
-        sdk_container_add_component(container, file_list);
+        
+        // Draw folder icon for directories
+        if (g_fm_state->files[i].is_directory) {
+            sdk_graphics_text(15, y, L"[DIR]", fg_color, bg_color);
+            sdk_graphics_text(80, y, g_fm_state->files[i].name, fg_color, bg_color);
+        } else {
+            // Draw size for files
+            sdk_graphics_text(15, y, L"[FILE]", fg_color, bg_color);
+            sdk_graphics_text(90, y, g_fm_state->files[i].name, fg_color, bg_color);
+        }
+        
+        y += 20;
     }
     
-    // Button bar
-    sdk_component_t *open_btn = sdk_button_create(10, 690, 80, 32);
-    if (open_btn != NULL) {
-        sdk_button_set_label(open_btn, L"Open");
-        sdk_container_add_component(container, open_btn);
+    // Draw instructions
+    sdk_graphics_text(10, 500, L"UP/DOWN: Navigate | ENTER: Open | ESC: Back", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
+    
+    sdk_graphics_present();
+}
+
+void file_manager_handle_input(const input_event_t *event) {
+    if (g_fm_state == NULL || event == NULL) {
+        return;
     }
     
-    sdk_component_t *back_btn = sdk_button_create(100, 690, 80, 32);
-    if (back_btn != NULL) {
-        sdk_button_set_label(back_btn, L"Back");
-        sdk_container_add_component(container, back_btn);
+    // Check arrow keys
+    if (sdk_input_is_arrow_key(event)) {
+        sdk_arrow_dir_t dir = sdk_input_get_arrow(event);
+        if (dir == SDK_ARROW_UP) {
+            if (g_fm_state->selected_index > 0) {
+                g_fm_state->selected_index--;
+            }
+        } else if (dir == SDK_ARROW_DOWN) {
+            if (g_fm_state->selected_index < (INT32)g_fm_state->file_count - 1) {
+                g_fm_state->selected_index++;
+            }
+        }
     }
     
-    sdk_component_t *refresh_btn = sdk_button_create(190, 690, 80, 32);
-    if (refresh_btn != NULL) {
-        sdk_button_set_label(refresh_btn, L"Refresh");
-        sdk_container_add_component(container, refresh_btn);
+    // Check enter key
+    if (sdk_input_is_enter(event)) {
+        if (g_fm_state->selected_index >= 0 && g_fm_state->selected_index < (INT32)g_fm_state->file_count) {
+            // Handle enter to open
+            if (g_fm_state->files[g_fm_state->selected_index].is_directory) {
+                // Navigate into directory
+                os_strcpy16(g_fm_state->current_path, g_fm_state->files[g_fm_state->selected_index].name);
+            }
+        }
     }
 }
 
-// Application update
-static void file_manager_on_update(sdk_app_t *app) {
-    // File manager would handle user input here
-    // For now, just maintain the display
-}
-
-// Application cleanup
-static void file_manager_on_cleanup(sdk_app_t *app) {
-    file_manager_state_t *state = (file_manager_state_t*)sdk_app_get_user_data(app);
-    if (state != NULL) {
-        heap_free(state);
+void file_manager_cleanup(void) {
+    if (g_fm_state != NULL) {
+        heap_free((EFI_PHYSICAL_ADDRESS)(UINTN)g_fm_state);
+        g_fm_state = NULL;
     }
-}
-
-// Main entry point for file manager
-EFI_STATUS EFIAPI file_manager_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
-    // Create application
-    sdk_app_t *app = sdk_app_create(L"File Manager", 1024, 768);
-    if (app == NULL) {
-        return EFI_OUT_OF_RESOURCES;
-    }
-    
-    // Set lifecycle callbacks
-    sdk_app_set_lifecycle(app, 
-                         file_manager_on_init,
-                         file_manager_on_update,
-                         file_manager_on_cleanup);
-    
-    // Set background color
-    sdk_app_set_background(app, SDK_COLOR_BG_LIGHT);
-    
-    // Run application
-    while (sdk_app_update(app)) {
-        // Application main loop
-    }
-    
-    // Cleanup
-    sdk_app_destroy(app);
-    
-    return EFI_SUCCESS;
 }

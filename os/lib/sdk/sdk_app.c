@@ -4,6 +4,7 @@
 #include "sdk/sdk_ui.h"
 #include "sdk/sdk_graphics.h"
 #include "sdk/sdk_input.h"
+#include "input.h"
 #include "heap.h"
 #include "os_string.h"
 
@@ -145,8 +146,19 @@ BOOLEAN sdk_app_update(sdk_app_t *app) {
         return FALSE;
     }
     
-    // Handle input (would come from event system in real app)
-    // For now, we'll just process frame
+    // Process input events from kernel event bus
+    if (app->state == SDK_APP_STATE_RUNNING) {
+        input_event_t event;
+        while (input_pop_event(&event)) {
+            // Dispatch event to root container
+            if (app->root_container != NULL) {
+                // Convert kernel input_event_t to SDK format
+                // and dispatch to container for propagation to components
+                sdk_container_handle_input(app->root_container, &event);
+            }
+            app->refresh_pending = TRUE;
+        }
+    }
     
     // Call update callback
     if (app->state == SDK_APP_STATE_RUNNING && app->on_update != NULL) {

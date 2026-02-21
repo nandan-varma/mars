@@ -55,6 +55,15 @@ void editor_render(void) {
     
     sdk_graphics_clear(SDK_COLOR_BG_LIGHT);
     sdk_graphics_text(10, 10, L"Text Editor", SDK_COLOR_TEXT_PRIMARY, SDK_COLOR_BG_LIGHT);
+    sdk_graphics_text(150, 10, L"(Type to edit, scroll with slider)", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
+    
+    // Draw line numbers on the left
+    sdk_graphics_line(35, 35, 35, 345, 1, SDK_COLOR_BORDER);
+    sdk_graphics_text(12, 45, L"1", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
+    sdk_graphics_text(12, 85, L"2", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
+    sdk_graphics_text(12, 125, L"3", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
+    sdk_graphics_text(12, 165, L"4", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
+    sdk_graphics_text(12, 205, L"5", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
     
     sdk_component_render(g_editor_state->text_field);
     sdk_component_render(g_editor_state->scroll_slider);

@@ -59,11 +59,49 @@ void settings_render(void) {
     sdk_graphics_clear(SDK_COLOR_BG_LIGHT);
     sdk_graphics_text(10, 10, L"Settings", SDK_COLOR_TEXT_PRIMARY, SDK_COLOR_BG_LIGHT);
     
+    // Brightness slider
     sdk_graphics_text(20, 40, L"Brightness:", SDK_COLOR_TEXT_PRIMARY, SDK_COLOR_BG_LIGHT);
     sdk_component_render(g_settings_state->brightness_slider);
     
+    // Display brightness value
+    INT32 brightness_value = sdk_slider_get_value(g_settings_state->brightness_slider);
+    CHAR16 brightness_buf[16];
+    os_strcpy16(brightness_buf, L"Value: ");
+    INT32 temp = brightness_value;
+    INT32 digits = 0;
+    if (temp == 0) digits = 1;
+    else while (temp > 0) { digits++; temp /= 10; }
+    
+    INT32 offset = os_strlen16(brightness_buf);
+    temp = brightness_value;
+    for (INT32 i = digits - 1; i >= 0; i--) {
+        brightness_buf[offset + i] = L'0' + (temp % 10);
+        temp /= 10;
+    }
+    brightness_buf[offset + digits] = L'\0';
+    sdk_graphics_text(240, 50, brightness_buf, SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
+    
+    // Volume slider
     sdk_graphics_text(20, 90, L"Volume:", SDK_COLOR_TEXT_PRIMARY, SDK_COLOR_BG_LIGHT);
     sdk_component_render(g_settings_state->volume_slider);
+    
+    // Display volume value
+    INT32 volume_value = sdk_slider_get_value(g_settings_state->volume_slider);
+    CHAR16 volume_buf[16];
+    os_strcpy16(volume_buf, L"Value: ");
+    temp = volume_value;
+    digits = 0;
+    if (temp == 0) digits = 1;
+    else while (temp > 0) { digits++; temp /= 10; }
+    
+    offset = os_strlen16(volume_buf);
+    temp = volume_value;
+    for (INT32 i = digits - 1; i >= 0; i--) {
+        volume_buf[offset + i] = L'0' + (temp % 10);
+        temp /= 10;
+    }
+    volume_buf[offset + digits] = L'\0';
+    sdk_graphics_text(240, 100, volume_buf, SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
     
     sdk_graphics_present();
 }
