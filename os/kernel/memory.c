@@ -38,6 +38,8 @@ void memory_init(const platform_context_t *platform) {
     UINTN descriptor_count = platform->memory_map.size / platform->memory_map.descriptor_size;
     for (UINTN i = 0; i < descriptor_count; ++i) {
         EFI_MEMORY_DESCRIPTOR *desc = nth_descriptor(platform, i);
+        // OPTIMIZATION: Early exit if descriptor is not conventional memory and we've already added some regions
+        // However, since descriptors may not be sorted, we scan all to ensure no conventional memory is missed
         if (desc->Type != EfiConventionalMemory) {
             continue;
         }

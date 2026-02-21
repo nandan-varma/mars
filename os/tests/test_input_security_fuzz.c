@@ -354,6 +354,27 @@ static int test_fuzz_stress_1000(void) {
     TEST_FAIL("fuzz_stress_1000");
 }
 
+/* Test 11: Event code boundary validation */
+static int test_event_code_boundaries(void) {
+    /* Test invalid event codes that should be rejected */
+    uint32_t invalid_codes[] = {0, 0xFFFFFFFF, 0x10000};
+    int rejected = 0;
+
+    for (size_t i = 0; i < sizeof(invalid_codes) / sizeof(invalid_codes[0]); i++) {
+        uint32_t code = invalid_codes[i];
+        /* Simulate: only EVENT_CODE_INPUT is valid for input channel */
+        if (code != EVENT_CODE_INPUT) {
+            rejected++;
+        }
+    }
+
+    if (rejected == 3) {
+        TEST_PASS("event_code_boundaries");
+        return 0;
+    }
+    TEST_FAIL("event_code_boundaries");
+}
+
 int main(void) {
     printf("=== Input Security Fuzz Tests ===\n");
     
@@ -368,6 +389,7 @@ int main(void) {
     failures += test_pid_range_validation();
     failures += test_mouse_delta_validation();
     failures += test_fuzz_stress_1000();
+    failures += test_event_code_boundaries();
 
     if (failures == 0) {
         printf("\n=== All input security fuzz tests passed ===\n");

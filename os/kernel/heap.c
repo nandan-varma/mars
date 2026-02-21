@@ -11,6 +11,8 @@
 // Diagnostic codes for error tracking
 #define DIAG_HEAP_ALLOC_OVERFLOW 0x0101
 #define DIAG_HEAP_EXHAUSTED 0x0102
+#define DIAG_HEAP_ALLOC 0x0103
+#define DIAG_HEAP_FREE 0x0104
 
 typedef struct free_block {
     UINTN magic;  // Magic number to detect corrupted/invalid blocks
@@ -99,6 +101,7 @@ void *heap_alloc(UINTN size) {
 
             g_heap_used += size;
             spinlock_release(&g_heap_lock);
+            diag_log(3, DIAG_HEAP_ALLOC, size, g_heap_used);
             return (UINT8 *)block + sizeof(free_block_t);
         }
 
@@ -185,6 +188,7 @@ void heap_free(void *ptr) {
     }
 
     spinlock_release(&g_heap_lock);
+    diag_log(3, DIAG_HEAP_FREE, (UINTN)ptr, 0);
 }
 
 UINTN heap_total_bytes(void) {
