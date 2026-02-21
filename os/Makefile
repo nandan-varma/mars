@@ -141,7 +141,12 @@ HOST_TEST_BINS := \
 	$(BUILD_DIR)/tests/test_heap \
 	$(BUILD_DIR)/tests/test_freelist \
 	$(BUILD_DIR)/tests/test_vm_builder \
-	$(BUILD_DIR)/tests/test_vm
+	$(BUILD_DIR)/tests/test_vm \
+	$(BUILD_DIR)/tests/test_input_security_fuzz \
+	$(BUILD_DIR)/tests/test_process_stress \
+	$(BUILD_DIR)/tests/test_performance_baseline \
+	$(BUILD_DIR)/tests/test_memory_safety_expanded \
+	$(BUILD_DIR)/tests/test_security_audit_fixes
 
 all: $(TARGET_EFI) user-apps disk-image
 
@@ -266,6 +271,26 @@ $(BUILD_DIR)/tests/test_vm_builder: tests/test_vm_builder.c
 	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
 
 $(BUILD_DIR)/tests/test_vm: tests/test_vm.c
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
+
+$(BUILD_DIR)/tests/test_input_security_fuzz: tests/test_input_security_fuzz.c
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
+
+$(BUILD_DIR)/tests/test_process_stress: tests/test_process_stress.c
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
+
+$(BUILD_DIR)/tests/test_performance_baseline: tests/test_performance_baseline.c
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
+
+$(BUILD_DIR)/tests/test_memory_safety_expanded: tests/test_memory_safety_expanded.c
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
+
+$(BUILD_DIR)/tests/test_security_audit_fixes: tests/test_security_audit_fixes.c
 	@mkdir -p $(dir $@)
 	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
 
