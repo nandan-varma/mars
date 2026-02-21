@@ -46,15 +46,61 @@ void sdk_graphics_clear_clip(void) {
 // Basic Drawing Operations
 // ============================================================================
 
+// Helper: Check if point is in clip region
+static BOOLEAN sdk_is_clipped(INT32 x, INT32 y) {
+    if (!g_clip_enabled) {
+        return FALSE;
+    }
+    return (x < g_clip_x || x >= g_clip_x + g_clip_width ||
+            y < g_clip_y || y >= g_clip_y + g_clip_height);
+}
+
+// Helper: Clamp rectangle to clip region
+static void sdk_clamp_rect(INT32 *x, INT32 *y, INT32 *w, INT32 *h) {
+    if (!g_clip_enabled) {
+        return;
+    }
+    INT32 start_x = *x;
+    INT32 start_y = *y;
+    INT32 end_x = start_x + *w;
+    INT32 end_y = start_y + *h;
+    
+    // Clamp to clip bounds
+    if (start_x < g_clip_x) start_x = g_clip_x;
+    if (start_y < g_clip_y) start_y = g_clip_y;
+    if (end_x > g_clip_x + g_clip_width) end_x = g_clip_x + g_clip_width;
+    if (end_y > g_clip_y + g_clip_height) end_y = g_clip_y + g_clip_height;
+    
+    *x = start_x;
+    *y = start_y;
+    *w = end_x - start_x;
+    *h = end_y - start_y;
+}
+
 void sdk_graphics_clear(UINT32 color) {
-    clearScreen(color);
+    if (g_clip_enabled) {
+        // Clear only the clip region
+        drawRect(g_clip_x, g_clip_y, g_clip_width, g_clip_height, color);
+    } else {
+        clearScreen(color);
+    }
 }
 
 void sdk_graphics_pixel(INT32 x, INT32 y, UINT32 color) {
+    if (sdk_is_clipped(x, y)) {
+        return;
+    }
     drawPixel(x, y, color);
 }
 
 void sdk_graphics_rect(INT32 x, INT32 y, INT32 w, INT32 h, UINT32 color) {
+    if (w <= 0 || h <= 0) {
+        return;
+    }
+    sdk_clamp_rect(&x, &y, &w, &h);
+    if (w <= 0 || h <= 0) {
+        return;
+    }
     drawRect(x, y, w, h, color);
 }
 
@@ -227,7 +273,10 @@ void sdk_graphics_text(INT32 x, INT32 y, const CHAR16 *text, UINT32 fg_color, UI
 
     INT32 cur_x = x;
     for (UINTN i = 0; text[i] != L'\0'; i++) {
-        drawChar(cur_x, y, text[i], fg_color, bg_color);
+        // Skip characters outside clip region
+        if (!sdk_is_clipped(cur_x, y) && !sdk_is_clipped(cur_x + SDK_FONT_WIDTH - 1, y + SDK_FONT_HEIGHT - 1)) {
+            drawChar(cur_x, y, text[i], fg_color, bg_color);
+        }
         cur_x += SDK_FONT_WIDTH;
     }
 }

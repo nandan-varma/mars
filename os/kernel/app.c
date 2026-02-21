@@ -680,6 +680,9 @@ static BOOLEAN sdk_app_task(void *context) {
         system_monitor_render();
     }
 
+    // Clear clip after rendering so other renders aren't affected
+    sdk_graphics_clear_clip();
+
     return TRUE;
 }
 
@@ -707,12 +710,12 @@ BOOLEAN app_launch(const CHAR16 *id) {
 
 void app_launch_core_suite(void) {
     const app_manifest_t defaults[] = {
-        { L"shell", L"System Shell", CAP_SYSTEM | CAP_INPUT, 90, 80, 420, 280 },
-        { L"files", L"File Browser", CAP_STORAGE | CAP_GRAPHICS, 160, 120, 420, 300 },
-        { L"term", L"Terminal", CAP_SYSTEM | CAP_INPUT, 240, 150, 460, 300 },
-        { L"settings", L"Settings", CAP_GRAPHICS, 320, 180, 360, 260 },
-        { L"tasks", L"Task Manager", CAP_SYSTEM, 400, 210, 360, 260 },
-        { L"logs", L"System Logs", CAP_SYSTEM, 460, 240, 380, 160 }
+        { L"calculator", L"Calculator", CAP_GRAPHICS | CAP_INPUT, 50, 50, 320, 280 },
+        { L"paint", L"Paint", CAP_GRAPHICS | CAP_INPUT, 100, 100, 400, 300 },
+        { L"editor", L"Text Editor", CAP_GRAPHICS | CAP_INPUT, 150, 150, 400, 300 },
+        { L"file_manager", L"File Manager", CAP_GRAPHICS | CAP_STORAGE, 200, 200, 400, 300 },
+        { L"system_monitor", L"System Monitor", CAP_GRAPHICS, 250, 250, 350, 250 },
+        { L"settings", L"Settings", CAP_GRAPHICS, 300, 180, 320, 240 }
     };
 
     for (UINTN i = 0; i < (sizeof(defaults) / sizeof(defaults[0])); ++i) {
