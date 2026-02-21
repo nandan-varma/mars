@@ -25,11 +25,16 @@ static BOOLEAN publish_input_event(const input_event_t *event) {
     packet.target_window = 0;
     packet.payload_size = sizeof(input_event_t);
 
-    const UINT8 *src = (const UINT8 *)event;
-    for (UINTN i = 0; i < sizeof(input_event_t); ++i) {
-        packet.payload[i] = src[i];
+    // PERFORMANCE FIX (Issue 5.3): Replace byte-by-byte loop with word-aligned copy
+    // input_event_t is ~24 bytes; copy as 3 × 64-bit words
+    const UINT64 *src_qwords = (const UINT64 *)event;
+    UINT64 *payload_qwords = (UINT64 *)packet.payload;
+    UINTN qword_count = (sizeof(input_event_t) + sizeof(UINT64) - 1) / sizeof(UINT64);
+    for (UINTN i = 0; i < qword_count; ++i) {
+        payload_qwords[i] = src_qwords[i];
     }
-    for (UINTN i = sizeof(input_event_t); i < EVENT_PAYLOAD_BYTES; ++i) {
+    // Zero-fill remaining payload
+    for (UINTN i = qword_count * sizeof(UINT64); i < EVENT_PAYLOAD_BYTES; ++i) {
         packet.payload[i] = 0;
     }
 
