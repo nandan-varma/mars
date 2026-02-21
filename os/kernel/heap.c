@@ -1,11 +1,16 @@
 #include "heap.h"
 
+#include "diag.h"
 #include "memory.h"
 #include "spinlock.h"
 
 #define HEAP_ALIGNMENT 16
 #define PAGE_SIZE 4096
 #define MAX_FREE_BLOCKS 128
+
+// Diagnostic codes for error tracking
+#define DIAG_HEAP_ALLOC_OVERFLOW 0x0101
+#define DIAG_HEAP_EXHAUSTED 0x0102
 
 typedef struct free_block {
     UINTN magic;  // Magic number to detect corrupted/invalid blocks
@@ -14,6 +19,10 @@ typedef struct free_block {
 } free_block_t;
 
 #define FREE_BLOCK_MAGIC 0xDEADBEEF
+
+// COMPILE-TIME SAFETY: Ensure free_block_t is large enough for metadata
+_Static_assert(sizeof(free_block_t) >= 24, 
+    "free_block_t must be at least 24 bytes to hold metadata");
 
 static UINT8 *g_heap_base;
 static UINTN g_heap_total;
@@ -103,11 +112,13 @@ void *heap_alloc(UINTN size) {
     // SECURITY FIX #1: Prevent overflow when computing current_aligned + needed
     // If either operand is too large, the addition would wrap around
     if (needed > g_heap_total || current_aligned > g_heap_total - needed) {
+        diag_log(1, DIAG_HEAP_ALLOC_OVERFLOW, needed, g_heap_total);
         spinlock_release(&g_heap_lock);
         return NULL;
     }
 
     if (current_aligned + needed > g_heap_total) {
+        diag_log(1, DIAG_HEAP_EXHAUSTED, needed, g_heap_used);
         spinlock_release(&g_heap_lock);
         return NULL;
     }

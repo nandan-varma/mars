@@ -1,5 +1,6 @@
 #include "memory.h"
 
+#include "diag.h"
 #include "memory_internal.h"
 
 static EFI_BOOT_SERVICES *g_boot_services;
@@ -61,6 +62,8 @@ EFI_PHYSICAL_ADDRESS memory_alloc_pages(UINTN page_count) {
     }
 
     if (address == 0) {
+        // ERROR HANDLING FIX #3: Log memory exhaustion
+        diag_log(2, 0x0201, page_count, g_outstanding_pages);
         return 0;
     }
 

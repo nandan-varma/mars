@@ -32,6 +32,11 @@ typedef struct {
     UINT8 payload[EVENT_PAYLOAD_BYTES];
 } event_packet_t;
 
+// COMPILE-TIME SAFETY: Ensure input_event_t fits in payload
+#include "input.h"
+_Static_assert(sizeof(input_event_t) <= EVENT_PAYLOAD_BYTES, 
+    "input_event_t must fit in event_packet_t payload");
+
 void event_bus_init(void);
 BOOLEAN event_bus_register_process(UINT32 pid);
 void event_bus_unregister_process(UINT32 pid);

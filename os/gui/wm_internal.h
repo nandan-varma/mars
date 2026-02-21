@@ -17,6 +17,9 @@
 #define TASKBAR_H 30
 #define WM_CONTENT_CHARS 512
 
+// COMPILE-TIME SAFETY: Ensure WM_MAX_WINDOWS is reasonable
+_Static_assert(WM_MAX_WINDOWS <= 256, "WM_MAX_WINDOWS exceeds reasonable limit");
+
 typedef struct {
     const CHAR16 *id;
     const CHAR16 *label;
