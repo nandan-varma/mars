@@ -31,6 +31,20 @@ static UINT64 syscall_log_handler(UINT64 domain, UINT64 code, UINT64 a, UINT64 b
     return 0;
 }
 
+// SECURITY FIX #4: Privilege Escalation via EVENT_CHANNEL_APP (CWE-269, CWE-276)
+//
+// VULNERABILITY:
+// The original code only checked CAP_SYSTEM for EVENT_CHANNEL_SYSTEM, but allowed
+// any app to send to EVENT_CHANNEL_APP with a target_pid pointing to a privileged process.
+// This allows unprivileged apps to trigger privileged processes to perform actions.
+//
+// EXAMPLE EXPLOIT:
+// 1. Unprivileged app sends event to EVENT_CHANNEL_APP with target_pid=kernel_app_pid
+// 2. Kernel app receives event and processes it
+// 3. App can influence kernel behavior without CAP_SYSTEM
+//
+// FIX: Require CAP_SYSTEM for sending to processes other than self
+
 static UINT64 syscall_send_event_handler(UINT64 packet_ptr, UINT64 b, UINT64 c, UINT64 d) {
     (void)b;
     (void)c;
@@ -59,8 +73,16 @@ static UINT64 syscall_send_event_handler(UINT64 packet_ptr, UINT64 b, UINT64 c, 
     }
 
     UINT32 caps = process_capabilities(pid);
+
+    // SECURITY: Block system channel without capability
     if ((caps & CAP_SYSTEM) == 0 && packet->channel == EVENT_CHANNEL_SYSTEM) {
         return 2;
+    }
+
+    // SECURITY FIX: Block sending to other processes without CAP_SYSTEM
+    // This prevents unprivileged apps from triggering privileged processes
+    if ((caps & CAP_SYSTEM) == 0 && packet->target_pid != 0 && packet->target_pid != pid) {
+        return 8;  // New error code: insufficient capability for inter-process messaging
     }
 
     event_packet_t sanitized = *packet;

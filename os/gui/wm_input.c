@@ -5,6 +5,9 @@
 #include "process.h"
 #include "wm_utils.h"
 
+// SECURITY FIX #2: TOCTOU (Time-Of-Check-Time-Of-Use) Race in window input routing
+// Process can exit between process_is_running() check and event_bus_publish()
+// Solution: Take atomic snapshot of owner_pid and use it consistently
 static void forward_input_to_focused_window(const input_event_t *event) {
     wm_state_t *state = wm_state();
 
@@ -17,7 +20,10 @@ static void forward_input_to_focused_window(const input_event_t *event) {
         return;
     }
 
-    if (!process_is_running(window->owner_pid)) {
+    // SECURITY: Capture owner_pid atomically (single read)
+    UINT32 owner_pid = window->owner_pid;
+
+    if (!process_is_running(owner_pid)) {
         window->visible = FALSE;
         window->invalidated = TRUE;
         state->focused_window = 0;
@@ -30,7 +36,7 @@ static void forward_input_to_focused_window(const input_event_t *event) {
     packet.channel = EVENT_CHANNEL_APP;
     packet.code = EVENT_CODE_APP_INPUT;
     packet.source_pid = 0;
-    packet.target_pid = window->owner_pid;
+    packet.target_pid = owner_pid;  // Use captured pid, not window->owner_pid
     packet.target_window = window->id;
     packet.payload_size = sizeof(input_event_t);
 

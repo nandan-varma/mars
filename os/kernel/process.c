@@ -100,19 +100,25 @@ void process_exit(UINT32 pid, INT32 exit_code) {
 
     process->state = PROCESS_TERMINATED;
     process->exit_code = exit_code;
-    process->pid = 0;
     UINT32 task_id = process->task_id;
     process->task_id = 0;
     EFI_PHYSICAL_ADDRESS vm_root = process->vm_root;
     process->vm_root = 0;
 
+    // SECURITY FIX: Unregister from event bus BEFORE clearing pid
+    // This prevents PID reuse while event queue still exists (CWE-362, CWE-416)
+    event_bus_unregister_process(pid);
+
+    // NOW clear pid after event bus is cleaned up
+    process->pid = 0;
+
     spinlock_release(&g_process_lock);
 
+    // All remaining operations happen with pid already cleared
     scheduler_stop_task(task_id);
     if (vm_root != 0 && vm_root != vm_pml4_physical()) {
         (void)vm_release_address_space(vm_root);
     }
-    event_bus_unregister_process(pid);
 }
 
 BOOLEAN process_wait(UINT32 pid, INT32 *out_exit_code) {
