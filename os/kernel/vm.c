@@ -66,16 +66,22 @@ static UINT64 max_u64(UINT64 a, UINT64 b) {
 
 void vm_init(const platform_context_t *platform) {
     reset_spaces();
+    vm_builder_clear_protected_regions();
 
     if (platform == NULL) {
         return;
     }
+
+    vm_builder_add_protected_region(0x0, 256, TRUE);
 
     if (platform->framebuffer.base > UINT64_MAX - platform->framebuffer.size) {
         return;
     }
 
     UINT64 framebuffer_end = platform->framebuffer.base + platform->framebuffer.size;
+    UINT64 fb_pages = (platform->framebuffer.size + 4095) / 4096;
+    vm_builder_add_protected_region(platform->framebuffer.base, fb_pages, FALSE);
+
     UINT64 requested_span = max_u64(FOUR_GIB, framebuffer_end);
 
     UINT64 max_span = (UINT64)VM_MAX_PDPT * ONE_GIB;

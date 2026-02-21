@@ -1,6 +1,7 @@
 #include "internal/event_channel.h"
 
 #include "event_packet.h"
+#include "spinlock.h"
 
 #define EVENT_QUEUE_CAPACITY 128
 #define EVENT_MAX_PROCESSES 64
@@ -24,6 +25,7 @@ static channel_event_queue_t g_channel_queues[EVENT_CHANNEL_COUNT];
 static event_backpressure_policy_t g_channel_policy[EVENT_CHANNEL_COUNT];
 static UINT64 g_channel_drop_count;
 static UINT64 g_process_drop_count;
+static spinlock_t g_event_lock;
 
 static BOOLEAN queue_push(event_packet_t *queue, UINTN *head, UINTN *tail, const event_packet_t *packet) {
     UINTN next = (*tail + 1) % EVENT_QUEUE_CAPACITY;
@@ -55,6 +57,7 @@ static UINTN queue_depth(UINTN head, UINTN tail) {
 }
 
 void event_channel_init(void) {
+    spinlock_init(&g_event_lock);
     g_channel_drop_count = 0;
     g_process_drop_count = 0;
 
@@ -77,6 +80,8 @@ BOOLEAN event_channel_enqueue(const event_packet_t *packet) {
         return FALSE;
     }
 
+    spinlock_acquire(&g_event_lock);
+
     channel_event_queue_t *channel_queue = &g_channel_queues[packet->channel];
     BOOLEAN accepted = queue_push(channel_queue->queue, &channel_queue->head, &channel_queue->tail, packet);
     if (!accepted) {
@@ -92,6 +97,7 @@ BOOLEAN event_channel_enqueue(const event_packet_t *packet) {
         }
     }
 
+    spinlock_release(&g_event_lock);
     return accepted;
 }
 
@@ -100,8 +106,13 @@ BOOLEAN event_channel_receive(UINT32 channel, event_packet_t *out_packet) {
         return FALSE;
     }
 
+    spinlock_acquire(&g_event_lock);
+
     channel_event_queue_t *channel_queue = &g_channel_queues[channel];
-    return queue_pop(channel_queue->queue, &channel_queue->head, &channel_queue->tail, out_packet);
+    BOOLEAN result = queue_pop(channel_queue->queue, &channel_queue->head, &channel_queue->tail, out_packet);
+
+    spinlock_release(&g_event_lock);
+    return result;
 }
 
 BOOLEAN event_channel_set_policy(UINT32 channel, event_backpressure_policy_t policy) {
@@ -135,8 +146,11 @@ UINT64 event_channel_drop_count(void) {
 }
 
 BOOLEAN event_process_register(UINT32 pid) {
+    spinlock_acquire(&g_event_lock);
+
     for (UINTN i = 0; i < EVENT_MAX_PROCESSES; ++i) {
         if (g_queues[i].active && g_queues[i].pid == pid) {
+            spinlock_release(&g_event_lock);
             return TRUE;
         }
     }
@@ -147,14 +161,18 @@ BOOLEAN event_process_register(UINT32 pid) {
             g_queues[i].pid = pid;
             g_queues[i].head = 0;
             g_queues[i].tail = 0;
+            spinlock_release(&g_event_lock);
             return TRUE;
         }
     }
 
+    spinlock_release(&g_event_lock);
     return FALSE;
 }
 
 void event_process_unregister(UINT32 pid) {
+    spinlock_acquire(&g_event_lock);
+
     for (UINTN i = 0; i < EVENT_MAX_PROCESSES; ++i) {
         if (g_queues[i].active && g_queues[i].pid == pid) {
             g_queues[i].active = FALSE;
@@ -163,12 +181,16 @@ void event_process_unregister(UINT32 pid) {
             g_queues[i].pid = 0;
         }
     }
+
+    spinlock_release(&g_event_lock);
 }
 
 BOOLEAN event_process_enqueue_targeted(const event_packet_t *packet) {
     if (packet == NULL || packet->target_pid == 0) {
         return FALSE;
     }
+
+    spinlock_acquire(&g_event_lock);
 
     BOOLEAN accepted = FALSE;
     for (UINTN i = 0; i < EVENT_MAX_PROCESSES; ++i) {
@@ -187,6 +209,7 @@ BOOLEAN event_process_enqueue_targeted(const event_packet_t *packet) {
         }
     }
 
+    spinlock_release(&g_event_lock);
     return accepted;
 }
 
@@ -195,14 +218,19 @@ BOOLEAN event_process_receive(UINT32 pid, event_packet_t *out_packet) {
         return FALSE;
     }
 
+    spinlock_acquire(&g_event_lock);
+
     for (UINTN i = 0; i < EVENT_MAX_PROCESSES; ++i) {
         if (!g_queues[i].active || g_queues[i].pid != pid) {
             continue;
         }
 
-        return queue_pop(g_queues[i].queue, &g_queues[i].head, &g_queues[i].tail, out_packet);
+        BOOLEAN result = queue_pop(g_queues[i].queue, &g_queues[i].head, &g_queues[i].tail, out_packet);
+        spinlock_release(&g_event_lock);
+        return result;
     }
 
+    spinlock_release(&g_event_lock);
     return FALSE;
 }
 

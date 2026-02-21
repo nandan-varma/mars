@@ -101,6 +101,7 @@ SRCS := \
 	kernel/panic.c \
 	kernel/interrupts.c \
 	kernel/heap.c \
+	kernel/spinlock.c \
 	kernel/event_bus.c \
 	kernel/event_packet.c \
 	kernel/event_channel.c \
@@ -232,19 +233,19 @@ debug: all
 clean:
 	rm -rf $(BUILD_DIR) $(TARGET_EFI)
 
-$(BUILD_DIR)/tests/test_event_bus_contract: tests/test_event_bus_contract.c kernel/event_bus.c kernel/event_packet.c kernel/event_channel.c
+$(BUILD_DIR)/tests/test_event_bus_contract: tests/test_event_bus_contract.c kernel/event_bus.c kernel/event_packet.c kernel/event_channel.c kernel/spinlock.c
 	@mkdir -p $(dir $@)
 	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
 
-$(BUILD_DIR)/tests/test_scheduler_fairness: tests/test_scheduler_fairness.c kernel/scheduler.c
+$(BUILD_DIR)/tests/test_scheduler_fairness: tests/test_scheduler_fairness.c kernel/scheduler.c kernel/spinlock.c
 	@mkdir -p $(dir $@)
 	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
 
-$(BUILD_DIR)/tests/test_process_slot_reuse: tests/test_process_slot_reuse.c kernel/process.c
+$(BUILD_DIR)/tests/test_process_slot_reuse: tests/test_process_slot_reuse.c kernel/process.c kernel/spinlock.c
 	@mkdir -p $(dir $@)
 	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
 
-$(BUILD_DIR)/tests/test_input_bounds: tests/test_input_bounds.c drivers/input.c
+$(BUILD_DIR)/tests/test_input_bounds: tests/test_input_bounds.c drivers/input.c kernel/spinlock.c
 	@mkdir -p $(dir $@)
 	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
 

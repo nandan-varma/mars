@@ -5,6 +5,48 @@
 #define PAGE_FLAG_PRESENT ((UINT64)0x001)
 #define PAGE_FLAG_WRITABLE ((UINT64)0x002)
 #define PAGE_FLAG_LARGE ((UINT64)0x080)
+#define PAGE_SIZE 4096
+
+#define MAX_PROTECTED_REGIONS 8
+
+typedef struct {
+    EFI_PHYSICAL_ADDRESS base;
+    UINTN pages;
+    BOOLEAN read_only;
+} protected_region_t;
+
+static protected_region_t g_protected_regions[MAX_PROTECTED_REGIONS];
+static UINTN g_protected_region_count;
+
+void vm_builder_add_protected_region(EFI_PHYSICAL_ADDRESS base, UINTN pages, BOOLEAN read_only) {
+    if (g_protected_region_count >= MAX_PROTECTED_REGIONS) {
+        return;
+    }
+    if (pages == 0) {
+        return;
+    }
+    g_protected_regions[g_protected_region_count].base = base;
+    g_protected_regions[g_protected_region_count].pages = pages;
+    g_protected_regions[g_protected_region_count].read_only = read_only;
+    ++g_protected_region_count;
+}
+
+void vm_builder_clear_protected_regions(void) {
+    g_protected_region_count = 0;
+}
+
+static BOOLEAN is_protected(EFI_PHYSICAL_ADDRESS physical, BOOLEAN *out_read_only) {
+    for (UINTN i = 0; i < g_protected_region_count; ++i) {
+        EFI_PHYSICAL_ADDRESS end = g_protected_regions[i].base + (EFI_PHYSICAL_ADDRESS)g_protected_regions[i].pages * PAGE_SIZE;
+        if (physical >= g_protected_regions[i].base && physical < end) {
+            if (out_read_only != NULL) {
+                *out_read_only = g_protected_regions[i].read_only;
+            }
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
 
 static void zero_page(UINT64 *page) {
     if (page == NULL) {
@@ -85,7 +127,16 @@ EFI_PHYSICAL_ADDRESS vm_builder_create_identity_space(vm_state_t *slot, UINTN pd
         UINT64 base = ((UINT64)pdpt_index) * ONE_GIB;
         for (UINTN pde_index = 0; pde_index < PAGE_TABLE_ENTRIES; ++pde_index) {
             UINT64 physical = base + ((UINT64)pde_index * PAGE_2M_SIZE);
-            pd[pde_index] = physical | PAGE_FLAG_PRESENT | PAGE_FLAG_WRITABLE | PAGE_FLAG_LARGE;
+
+            BOOLEAN read_only = FALSE;
+            BOOLEAN protected = is_protected(physical, &read_only);
+
+            UINT64 flags = PAGE_FLAG_PRESENT | PAGE_FLAG_LARGE;
+            if (!protected || !read_only) {
+                flags |= PAGE_FLAG_WRITABLE;
+            }
+
+            pd[pde_index] = physical | flags;
         }
     }
 

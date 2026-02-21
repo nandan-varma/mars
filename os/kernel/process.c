@@ -1,6 +1,7 @@
 #include "process.h"
 
 #include "event_bus.h"
+#include "spinlock.h"
 #include "vm.h"
 
 #define MAX_PROCESSES 64
@@ -8,6 +9,7 @@
 static process_t g_processes[MAX_PROCESSES];
 static UINT32 g_next_pid;
 static UINT32 g_current_pid;
+static spinlock_t g_process_lock;
 
 static process_t *find_process(UINT32 pid) {
     for (UINTN i = 0; i < MAX_PROCESSES; ++i) {
@@ -28,6 +30,7 @@ static process_t *find_reusable_slot(void) {
 }
 
 void process_init(void) {
+    spinlock_init(&g_process_lock);
     g_next_pid = 1;
     g_current_pid = 0;
 
@@ -50,8 +53,11 @@ UINT32 process_create_kernel(const CHAR16 *name, task_entry_t entry, void *conte
         capabilities &= ~CAP_SYSTEM;
     }
 
+    spinlock_acquire(&g_process_lock);
+
     process_t *process = find_reusable_slot();
     if (process == NULL) {
+        spinlock_release(&g_process_lock);
         return 0;
     }
 
@@ -63,14 +69,19 @@ UINT32 process_create_kernel(const CHAR16 *name, task_entry_t entry, void *conte
     if (process->vm_root == 0) {
         process->vm_root = vm_pml4_physical();
     }
+
+    spinlock_release(&g_process_lock);
+
     process->task_id = scheduler_create_task(process->pid, name, priority, entry, context);
     if (process->task_id == 0) {
+        spinlock_acquire(&g_process_lock);
         if (process->vm_root != 0 && process->vm_root != vm_pml4_physical()) {
             (void)vm_release_address_space(process->vm_root);
         }
         process->pid = 0;
         process->state = PROCESS_NEW;
         process->exit_code = -1;
+        spinlock_release(&g_process_lock);
         return 0;
     }
 
@@ -79,19 +90,27 @@ UINT32 process_create_kernel(const CHAR16 *name, task_entry_t entry, void *conte
 }
 
 void process_exit(UINT32 pid, INT32 exit_code) {
+    spinlock_acquire(&g_process_lock);
+
     process_t *process = find_process(pid);
     if (process == NULL) {
+        spinlock_release(&g_process_lock);
         return;
     }
 
     process->state = PROCESS_TERMINATED;
     process->exit_code = exit_code;
     process->pid = 0;
-    scheduler_stop_task(process->task_id);
+    UINT32 task_id = process->task_id;
     process->task_id = 0;
-    if (process->vm_root != 0 && process->vm_root != vm_pml4_physical()) {
-        (void)vm_release_address_space(process->vm_root);
-        process->vm_root = 0;
+    EFI_PHYSICAL_ADDRESS vm_root = process->vm_root;
+    process->vm_root = 0;
+
+    spinlock_release(&g_process_lock);
+
+    scheduler_stop_task(task_id);
+    if (vm_root != 0 && vm_root != vm_pml4_physical()) {
+        (void)vm_release_address_space(vm_root);
     }
     event_bus_unregister_process(pid);
 }

@@ -5,6 +5,7 @@
 
 void heap_init(UINTN initial_pages);
 void *heap_alloc(UINTN size);
+void heap_free(void *ptr);
 UINTN heap_total_bytes(void);
 UINTN heap_used_bytes(void);
 

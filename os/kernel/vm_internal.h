@@ -18,6 +18,8 @@ typedef struct {
     BOOLEAN active;
 } vm_state_t;
 
+void vm_builder_add_protected_region(EFI_PHYSICAL_ADDRESS base, UINTN pages, BOOLEAN read_only);
+void vm_builder_clear_protected_regions(void);
 EFI_PHYSICAL_ADDRESS vm_builder_create_identity_space(vm_state_t *slot, UINTN pd_count);
 
 #endif

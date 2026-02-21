@@ -76,6 +76,7 @@ BOOLEAN app_instance_launch(const CHAR16 *id, app_task_entry_t entry, app_conten
         instance->input_len = 0;
         instance->pid = process_create_kernel(instance->manifest.title, entry, instance, 1, instance->manifest.capabilities, FALSE);
         if (instance->pid == 0) {
+            heap_free(instance);
             return FALSE;
         }
 
@@ -89,6 +90,7 @@ BOOLEAN app_instance_launch(const CHAR16 *id, app_task_entry_t entry, app_conten
         );
         if (instance->window_id == 0) {
             process_exit(instance->pid, -2);
+            heap_free(instance);
             return FALSE;
         }
 

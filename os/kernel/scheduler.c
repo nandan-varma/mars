@@ -3,6 +3,7 @@
 #include "diag.h"
 #include "interrupts.h"
 #include "process.h"
+#include "spinlock.h"
 #include "timer.h"
 
 #define MAX_TASKS 64
@@ -13,6 +14,7 @@ static UINT32 g_next_task_id;
 static UINTN g_rr_index;
 static BOOLEAN g_timer_preemptive;
 static UINT64 g_last_task_tick;
+static spinlock_t g_scheduler_lock;
 
 static void copy_name(CHAR16 *dst, const CHAR16 *src, UINTN max_chars) {
     if (max_chars == 0) {
@@ -33,6 +35,7 @@ static void copy_name(CHAR16 *dst, const CHAR16 *src, UINTN max_chars) {
 }
 
 void scheduler_init(void) {
+    spinlock_init(&g_scheduler_lock);
     g_task_count = 0;
     g_next_task_id = 1;
     g_rr_index = 0;
@@ -45,6 +48,8 @@ UINT32 scheduler_create_task(UINT32 owner_pid, const CHAR16 *name, UINT8 priorit
         return 0;
     }
 
+    spinlock_acquire(&g_scheduler_lock);
+
     task_t *task = NULL;
     for (UINTN i = 0; i < g_task_count; ++i) {
         if (g_tasks[i].state == TASK_STOPPED) {
@@ -55,6 +60,7 @@ UINT32 scheduler_create_task(UINT32 owner_pid, const CHAR16 *name, UINT8 priorit
 
     if (task == NULL) {
         if (g_task_count >= MAX_TASKS) {
+            spinlock_release(&g_scheduler_lock);
             return 0;
         }
         task = &g_tasks[g_task_count++];
@@ -68,6 +74,8 @@ UINT32 scheduler_create_task(UINT32 owner_pid, const CHAR16 *name, UINT8 priorit
     task->entry = entry;
     task->context = context;
     copy_name(task->name, name, 24);
+
+    spinlock_release(&g_scheduler_lock);
     return task->id;
 }
 
@@ -75,6 +83,8 @@ void scheduler_stop_task(UINT32 task_id) {
     if (task_id == 0) {
         return;
     }
+
+    spinlock_acquire(&g_scheduler_lock);
 
     for (UINTN i = 0; i < g_task_count; ++i) {
         if (g_tasks[i].id != task_id) {
@@ -86,8 +96,12 @@ void scheduler_stop_task(UINT32 task_id) {
         g_tasks[i].entry = NULL;
         g_tasks[i].context = NULL;
         g_tasks[i].name[0] = 0;
+        g_tasks[i].runtime_ticks = 0;
+        spinlock_release(&g_scheduler_lock);
         return;
     }
+
+    spinlock_release(&g_scheduler_lock);
 }
 
 static void scheduler_dispatch_tick(void) {
