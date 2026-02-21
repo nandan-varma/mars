@@ -197,6 +197,9 @@ BOOLEAN event_process_enqueue_targeted(const event_packet_t *packet) {
 
     spinlock_acquire(&g_event_lock);
 
+    // PERFORMANCE FIX (Issue 2.3): Early-exit optimization for process queue search
+    // Instead of always scanning all EVENT_MAX_PROCESSES slots, break immediately
+    // after finding and enqueueing to the target PID. Most cases: 1-5 iteration avg.
     BOOLEAN accepted = FALSE;
     for (UINTN i = 0; i < EVENT_MAX_PROCESSES; ++i) {
         if (!g_queues[i].active) {
@@ -207,11 +210,13 @@ BOOLEAN event_process_enqueue_targeted(const event_packet_t *packet) {
             continue;
         }
 
+        // Found target! Enqueue and break immediately
         if (queue_push(g_queues[i].queue, &g_queues[i].head, &g_queues[i].tail, packet)) {
             accepted = TRUE;
         } else {
             ++g_process_drop_count;
         }
+        break;  // Exit after finding and processing target PID
     }
 
     spinlock_release(&g_event_lock);
