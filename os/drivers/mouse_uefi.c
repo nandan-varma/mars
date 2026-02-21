@@ -242,12 +242,16 @@ UINTN mouse_driver_poll(input_event_t *events_out, UINTN max_events) {
         return 0;
     }
 
-    UINTN count = poll_ps2_mouse(events_out, max_events);
-    if (count > 0) {
-        return count;
+    // PERFORMANCE FIX (Issue 5.2): Check PS/2 enabled flag before polling
+    // Skips unnecessary UEFI GetState() calls on disabled protocols
+    if (g_ps2_enabled) {
+        UINTN count = poll_ps2_mouse(events_out, max_events);
+        if (count > 0) {
+            return count;
+        }
     }
 
-    count = poll_absolute_pointer(events_out, max_events);
+    UINTN count = poll_absolute_pointer(events_out, max_events);
     if (count > 0) {
         return count;
     }
