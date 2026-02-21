@@ -129,6 +129,9 @@ SRCS := \
 	gui/wm_utils.c \
 	lib/string.c
 
+# SDK Library
+SDK_LIB := lib/sdk/libmarssdk.a
+
 OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS))
 
 .PHONY: all clean run debug esp run-gui run-fs run-apps user-apps disk-image test-host
@@ -154,13 +157,13 @@ $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/kernel.so: $(OBJS)
-	$(LD) $(LDFLAGS) $(OBJS) $(LDLIBS) -o $@
+$(BUILD_DIR)/kernel.so: $(SDK_LIB) $(OBJS)
+	$(LD) $(LDFLAGS) $(OBJS) $(SDK_LIB) $(LDLIBS) -o $@
 
 ifeq ($(USE_MINGW),1)
-$(TARGET_EFI): $(OBJS)
+$(TARGET_EFI): $(SDK_LIB) $(OBJS)
 	@mkdir -p $(EFI_BOOT_DIR)
-	$(CC) $(CFLAGS) $(OBJS) $(LDFLAGS) -o $@
+	$(CC) $(CFLAGS) $(OBJS) $(SDK_LIB) $(LDFLAGS) -o $@
 else
 $(TARGET_EFI): $(BUILD_DIR)/kernel.so
 	@mkdir -p $(EFI_BOOT_DIR)
@@ -241,6 +244,10 @@ debug: all
 
 clean:
 	rm -rf $(BUILD_DIR) $(TARGET_EFI)
+	$(MAKE) -C lib/sdk clean
+
+$(SDK_LIB):
+	$(MAKE) -C lib/sdk
 
 $(BUILD_DIR)/tests/test_event_bus_contract: tests/test_event_bus_contract.c kernel/event_bus.c kernel/event_packet.c kernel/event_channel.c kernel/spinlock.c
 	@mkdir -p $(dir $@)
