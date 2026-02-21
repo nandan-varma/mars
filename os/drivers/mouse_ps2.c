@@ -29,6 +29,21 @@ UINTN poll_ps2_mouse(input_event_t *events_out, UINTN max_events) {
             continue;
         }
 
+        // SECURITY FIX (HIGH #13/Memory #13): Validate PS/2 packet flags
+        // First byte (index 0) has reserved bits that should be 0 in certain configurations
+        // CWE-20: Improper Input Validation
+        if (g_ps2_packet_index == 0) {
+            // Bit 6 and 7 should generally be 0 for valid PS/2 packets
+            // Bit 3 must be 1 (already checked above)
+            // Allow bits 0-2 (button flags) and 4-5 (overflow/sign bits)
+            // Reject if reserved bits are set incorrectly
+            if ((data & 0xC0) != 0) {
+                // Reserved bits 6-7 are set - invalid packet, reset
+                g_ps2_packet_index = 0;
+                continue;
+            }
+        }
+
         // SECURITY: Check if packet is complete BEFORE writing more data
         if (g_ps2_packet_index >= 3) {
             // Packet is complete, process it first

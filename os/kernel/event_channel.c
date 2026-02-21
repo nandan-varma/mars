@@ -120,7 +120,12 @@ BOOLEAN event_channel_set_policy(UINT32 channel, event_backpressure_policy_t pol
         return FALSE;
     }
 
+    // SECURITY FIX (HIGH #9): Protect policy change with spinlock to prevent
+    // race with event_channel_enqueue() reading stale policy value.
+    // CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization
+    spinlock_acquire(&g_event_lock);
     g_channel_policy[channel] = policy;
+    spinlock_release(&g_event_lock);
     return TRUE;
 }
 

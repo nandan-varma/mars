@@ -21,11 +21,29 @@ UINTN poll_absolute_pointer(input_event_t *events_out, UINTN max_events) {
         INT32 mapped_x = g_mouse_x;
         INT32 mapped_y = g_mouse_y;
 
-        if (max_x > min_x) {
-            mapped_x = (INT32)(((state.CurrentX - min_x) * (UINT64)(g_screen_w - 1)) / (max_x - min_x));
+        // SECURITY FIX (HIGH #11): Add overflow checks before scaling mouse coordinates
+        // Prevents integer overflow when mapping absolute coordinates to screen space.
+        // CWE-190: Integer Overflow
+        if (max_x > min_x && state.CurrentX >= min_x && state.CurrentX <= max_x) {
+            UINT64 range = max_x - min_x;
+            UINT64 current_offset = state.CurrentX - min_x;
+            UINT64 screen_range = (UINT64)(g_screen_w - 1);
+            
+            // Check for potential overflow: current_offset * screen_range
+            if (current_offset <= UINT64_MAX / screen_range) {
+                mapped_x = (INT32)((current_offset * screen_range) / range);
+            }
         }
-        if (max_y > min_y) {
-            mapped_y = (INT32)(((state.CurrentY - min_y) * (UINT64)(g_screen_h - 1)) / (max_y - min_y));
+        
+        if (max_y > min_y && state.CurrentY >= min_y && state.CurrentY <= max_y) {
+            UINT64 range = max_y - min_y;
+            UINT64 current_offset = state.CurrentY - min_y;
+            UINT64 screen_range = (UINT64)(g_screen_h - 1);
+            
+            // Check for potential overflow: current_offset * screen_range
+            if (current_offset <= UINT64_MAX / screen_range) {
+                mapped_y = (INT32)((current_offset * screen_range) / range);
+            }
         }
 
         mapped_x = clamp(mapped_x, 0, g_screen_w - 1);

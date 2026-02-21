@@ -129,15 +129,18 @@ void process_exit(UINT32 pid, INT32 exit_code) {
 }
 
 BOOLEAN process_wait(UINT32 pid, INT32 *out_exit_code) {
+    // SECURITY FIX (HIGH #5): Acquire lock to prevent use-after-free
+    spinlock_acquire(&g_process_lock);
     process_t *process = find_process(pid);
-    if (process == NULL || process->state != PROCESS_TERMINATED) {
-        return FALSE;
+    BOOLEAN result = FALSE;
+    if (process != NULL && process->state == PROCESS_TERMINATED) {
+        if (out_exit_code != NULL) {
+            *out_exit_code = process->exit_code;
+        }
+        result = TRUE;
     }
-
-    if (out_exit_code != NULL) {
-        *out_exit_code = process->exit_code;
-    }
-    return TRUE;
+    spinlock_release(&g_process_lock);
+    return result;
 }
 
 UINT32 process_current_pid(void) {
@@ -149,11 +152,17 @@ void process_set_current_pid(UINT32 pid) {
 }
 
 UINT32 process_capabilities(UINT32 pid) {
+    // SECURITY FIX (HIGH #5): Acquire lock to prevent use-after-free race
+    // between find_process() and concurrent process_exit() clearing pid.
+    // CWE-416: Use After Free
+    spinlock_acquire(&g_process_lock);
     process_t *process = find_process(pid);
-    if (process == NULL) {
-        return 0;
+    UINT32 capabilities = 0;
+    if (process != NULL) {
+        capabilities = process->capabilities;
     }
-    return process->capabilities;
+    spinlock_release(&g_process_lock);
+    return capabilities;
 }
 
 UINTN process_count(void) {
@@ -178,10 +187,13 @@ UINTN process_running_count(void) {
 }
 
 BOOLEAN process_is_running(UINT32 pid) {
+    // SECURITY FIX (HIGH #5): Acquire lock to prevent use-after-free
+    spinlock_acquire(&g_process_lock);
     process_t *process = find_process(pid);
-    if (process == NULL) {
-        return FALSE;
+    BOOLEAN running = FALSE;
+    if (process != NULL) {
+        running = process->state == PROCESS_RUNNING || process->state == PROCESS_WAITING;
     }
-
-    return process->state == PROCESS_RUNNING || process->state == PROCESS_WAITING;
+    spinlock_release(&g_process_lock);
+    return running;
 }

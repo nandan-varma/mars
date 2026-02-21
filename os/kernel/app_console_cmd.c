@@ -44,9 +44,18 @@ static void app_trim_front(CHAR16 *buffer, UINTN max_chars, UINTN *len_io, UINTN
         return;
     }
 
+    // SECURITY FIX (HIGH #10): Make local copy of len and validate bounds
+    // to prevent out-of-bounds buffer access. CWE-125, CWE-787: Out-of-bounds Access
     UINTN len = *len_io;
+    
+    // Early validation: if len is already corrupted, clamp it
+    if (len > max_chars) {
+        len = max_chars;
+    }
+    
     while (len + needed_space + 1 >= max_chars && len > 0) {
         UINTN trim = 0;
+        // Safe bounds check: trim < len is guaranteed by loop condition validation above
         while (trim < len && buffer[trim] != L'\n') {
             ++trim;
         }
@@ -60,19 +69,26 @@ static void app_trim_front(CHAR16 *buffer, UINTN max_chars, UINTN *len_io, UINTN
         }
 
         UINTN write = 0;
-        for (UINTN read = trim; read < len; ++read) {
-            buffer[write++] = buffer[read];
+        // Safe: read starts at trim (checked < len), stops at len
+        for (UINTN read = trim; read < len && read < max_chars; ++read) {
+            if (write < max_chars - 1) {  // Leave room for null terminator
+                buffer[write++] = buffer[read];
+            }
         }
         len = write;
         
-        // SECURITY FIX #9: Ensure we don't write past buffer bounds
-        // If len >= max_chars, we cannot write the null terminator
+        // Ensure we don't write past buffer bounds
         if (len >= max_chars) {
             len = max_chars - 1;
         }
         buffer[len] = 0;
     }
 
+    // Final validation before returning
+    if (len >= max_chars) {
+        len = max_chars - 1;
+    }
+    
     *len_io = len;
 }
 

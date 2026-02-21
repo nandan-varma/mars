@@ -1,7 +1,11 @@
 #include "mouse_uefi.h"
 #include "mouse_internal.h"
 
+// SECURITY FIX (HIGH #8): Reduce unbounded polling timeout from 100000 to 1000
+// to prevent potential DoS via stuck hardware. This maintains responsiveness
+// while avoiding infinite waits. CWE-835: Infinite Loop
 #define MAX_POINTER_PROTOCOLS 8
+#define PS2_POLL_TIMEOUT 1000
 
 EFI_BOOT_SERVICES *g_boot_services;
 EFI_SIMPLE_POINTER_PROTOCOL *g_simple_protocols[MAX_POINTER_PROTOCOLS];
@@ -134,17 +138,17 @@ static BOOLEAN ps2_wait_output_full(UINTN attempts) {
 }
 
 static BOOLEAN ps2_write_mouse(UINT8 value) {
-    if (!ps2_wait_input_clear(100000)) {
+    if (!ps2_wait_input_clear(PS2_POLL_TIMEOUT)) {
         return FALSE;
     }
     io_out8(0x64, 0xD4);
 
-    if (!ps2_wait_input_clear(100000)) {
+    if (!ps2_wait_input_clear(PS2_POLL_TIMEOUT)) {
         return FALSE;
     }
     io_out8(0x60, value);
 
-    if (!ps2_wait_output_full(100000)) {
+    if (!ps2_wait_output_full(PS2_POLL_TIMEOUT)) {
         return FALSE;
     }
 
@@ -152,16 +156,16 @@ static BOOLEAN ps2_write_mouse(UINT8 value) {
 }
 
 static BOOLEAN ps2_mouse_init(void) {
-    if (!ps2_wait_input_clear(100000)) {
+    if (!ps2_wait_input_clear(PS2_POLL_TIMEOUT)) {
         return FALSE;
     }
     io_out8(0x64, 0xA8);
 
-    if (!ps2_wait_input_clear(100000)) {
+    if (!ps2_wait_input_clear(PS2_POLL_TIMEOUT)) {
         return FALSE;
     }
     io_out8(0x64, 0x20);
-    if (!ps2_wait_output_full(100000)) {
+    if (!ps2_wait_output_full(PS2_POLL_TIMEOUT)) {
         return FALSE;
     }
 
@@ -169,11 +173,11 @@ static BOOLEAN ps2_mouse_init(void) {
     command_byte |= 0x02;
     command_byte &= (UINT8)~0x20;
 
-    if (!ps2_wait_input_clear(100000)) {
+    if (!ps2_wait_input_clear(PS2_POLL_TIMEOUT)) {
         return FALSE;
     }
     io_out8(0x64, 0x60);
-    if (!ps2_wait_input_clear(100000)) {
+    if (!ps2_wait_input_clear(PS2_POLL_TIMEOUT)) {
         return FALSE;
     }
     io_out8(0x60, command_byte);

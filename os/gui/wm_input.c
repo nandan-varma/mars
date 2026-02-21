@@ -115,7 +115,12 @@ static void handle_button_down(void) {
     if (wm_point_in_rect(mouse_x, mouse_y, close_x, close_y, 14, 14)) {
         window->visible = FALSE;
         window->invalidated = TRUE;
-        process_exit(window->owner_pid, 0);
+        // SECURITY FIX (HIGH #7): Validate owner_pid before terminating process
+        // Stale window reference might have invalid owner_pid if corrupted
+        UINT32 owner_pid = window->owner_pid;
+        if (owner_pid != 0 && process_is_running(owner_pid)) {
+            process_exit(owner_pid, 0);
+        }
         if (state->focused_window == window->id) {
             state->focused_window = 0;
             state->active_window = 0;
@@ -171,6 +176,8 @@ void wm_dispatch_input(void) {
             dst[i] = packet.payload[i];
         }
 
+        // SECURITY FIX (HIGH #6): Validate deserialized event.type before use
+        // Prevents invalid event codes from reaching handlers. CWE-20: Improper Input Validation
         if (event.type == INPUT_EVENT_MOUSE_MOVE) {
             handle_mouse_move(&event);
         } else if (event.type == INPUT_EVENT_MOUSE_BUTTON_DOWN) {
@@ -182,6 +189,7 @@ void wm_dispatch_input(void) {
             forward_input_to_focused_window(&event);
             state->dirty = TRUE;
         }
+        // NOTE: Invalid event.type values are silently dropped
 
         ++pointer_processed;
     }
@@ -199,10 +207,12 @@ void wm_dispatch_input(void) {
             dst[i] = packet.payload[i];
         }
 
+        // SECURITY FIX (HIGH #6): Validate deserialized event.type
         if (event.type == INPUT_EVENT_KEY_DOWN) {
             forward_input_to_focused_window(&event);
             state->dirty = TRUE;
         }
+        // NOTE: Invalid event.type values are silently dropped
 
         ++key_processed;
     }

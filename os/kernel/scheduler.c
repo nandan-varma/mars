@@ -15,6 +15,10 @@ static UINTN g_rr_index;
 static BOOLEAN g_timer_preemptive;
 static UINT64 g_last_task_tick;
 static spinlock_t g_scheduler_lock;
+// PERFORMANCE FIX: Bitmap for faster task state lookup
+// Bit i set = task i is READY or RUNNING (not STOPPED)
+// Allows O(1) bit check vs O(n) array scan
+static UINT64 g_task_active_bitmap;
 
 static void copy_name(CHAR16 *dst, const CHAR16 *src, UINTN max_chars) {
     if (max_chars == 0) {
@@ -41,6 +45,7 @@ void scheduler_init(void) {
     g_rr_index = 0;
     g_timer_preemptive = FALSE;
     g_last_task_tick = 0;
+    g_task_active_bitmap = 0;  // No tasks active initially
 }
 
 UINT32 scheduler_create_task(UINT32 owner_pid, const CHAR16 *name, UINT8 priority, task_entry_t entry, void *context) {
@@ -74,6 +79,13 @@ UINT32 scheduler_create_task(UINT32 owner_pid, const CHAR16 *name, UINT8 priorit
     task->entry = entry;
     task->context = context;
     copy_name(task->name, name, 24);
+    
+    // PERFORMANCE FIX: Update active bitmap
+    // Find which slot this task occupies
+    UINTN slot = task - &g_tasks[0];
+    if (slot < MAX_TASKS) {
+        g_task_active_bitmap |= (1ULL << slot);
+    }
 
     spinlock_release(&g_scheduler_lock);
     return task->id;
@@ -97,6 +109,12 @@ void scheduler_stop_task(UINT32 task_id) {
         g_tasks[i].context = NULL;
         g_tasks[i].name[0] = 0;
         g_tasks[i].runtime_ticks = 0;
+        
+        // PERFORMANCE FIX: Update active bitmap
+        if (i < MAX_TASKS) {
+            g_task_active_bitmap &= ~(1ULL << i);
+        }
+        
         spinlock_release(&g_scheduler_lock);
         return;
     }
@@ -134,10 +152,23 @@ void scheduler_step(void) {
         g_last_task_tick = tick;
     }
 
+    // PERFORMANCE FIX #1: Check bitmap for fast empty-pool detection
+    // If no active tasks (bitmap == 0), skip scheduling loop entirely
+    if (g_task_active_bitmap == 0) {
+        return;  // No active tasks, don't spin
+    }
+
     UINTN start = g_rr_index;
     for (UINTN offset = 0; offset < g_task_count; ++offset) {
         UINTN index = (start + offset) % g_task_count;
         task_t *task = &g_tasks[index];
+        
+        // PERFORMANCE FIX #2: Use bitmap check to skip stopped tasks fast
+        // If bit is not set, task is definitely stopped, skip without state check
+        if (!(g_task_active_bitmap & (1ULL << index))) {
+            continue;
+        }
+        
         if (task->owner_pid != 0 && !process_is_running(task->owner_pid)) {
             scheduler_stop_task(task->id);
             continue;

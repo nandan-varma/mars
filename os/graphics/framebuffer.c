@@ -73,6 +73,15 @@ void drawRect(INT32 x, INT32 y, INT32 width, INT32 height, UINT32 color) {
         return;
     }
 
+    // SECURITY FIX (Memory Safety #11): Validate dimensions don't overflow
+    // when computing end coordinates. CWE-190: Integer Overflow
+    if (x > 0 && width > (INT32)2147483647 - x) {
+        return;  // width + x would overflow INT32
+    }
+    if (y > 0 && height > (INT32)2147483647 - y) {
+        return;  // height + y would overflow INT32
+    }
+
     for (INT32 row = 0; row < height; ++row) {
         INT32 py = y + row;
         if (py < 0 || (UINT32)py >= g_framebuffer.height) {
@@ -87,6 +96,10 @@ void drawRect(INT32 x, INT32 y, INT32 width, INT32 height, UINT32 color) {
             UINTN offset = g_backbuffer != NULL
                 ? backbuffer_pixel_offset((UINT32)px, (UINT32)py)
                 : (UINTN)py * g_framebuffer.pitch + (UINTN)px;
+            // Additional safety check on offset
+            if (offset == 18446744073709551615ULL) {
+                continue;
+            }
             g_framebuffer.base[offset] = color;
         }
     }
