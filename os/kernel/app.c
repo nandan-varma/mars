@@ -659,29 +659,39 @@ static BOOLEAN sdk_app_task(void *context) {
         ++processed;
     }
 
-    // Render current frame - set clip to window bounds first
-    const wm_window_t *win = wm_get_window(instance->window_id);
-    if (win != NULL) {
-        // Client area: x+8, y+30, width-16, height-38
-        sdk_graphics_set_clip(win->x + 8, win->y + 30, win->width - 16, win->height - 38);
-    }
+    // SDK apps process input but don't render to framebuffer directly
+    // WM controls all rendering - this prevents conflicts/flickering
+    // Apps can update internal state but display is managed by WM
     
-    if (equals_chars(instance->manifest.id, L"calculator")) {
-        calculator_render();
-    } else if (equals_chars(instance->manifest.id, L"paint")) {
-        paint_render();
-    } else if (equals_chars(instance->manifest.id, L"editor")) {
-        editor_render();
-    } else if (equals_chars(instance->manifest.id, L"settings")) {
-        settings_render();
-    } else if (equals_chars(instance->manifest.id, L"file_manager")) {
-        file_manager_render();
-    } else if (equals_chars(instance->manifest.id, L"system_monitor")) {
-        system_monitor_render();
+    // Update content buffer so WM shows something in the window
+    static const CHAR16 app_names[6][16] = {
+        L"Calculator",
+        L"Paint",
+        L"Text Editor",
+        L"File Manager",
+        L"Settings",
+        L"System Monitor"
+    };
+    
+    // Find app name
+    const CHAR16 *name = L"App";
+    if (equals_chars(instance->manifest.id, L"calculator")) name = app_names[0];
+    else if (equals_chars(instance->manifest.id, L"paint")) name = app_names[1];
+    else if (equals_chars(instance->manifest.id, L"editor")) name = app_names[2];
+    else if (equals_chars(instance->manifest.id, L"file_manager")) name = app_names[3];
+    else if (equals_chars(instance->manifest.id, L"settings")) name = app_names[4];
+    else if (equals_chars(instance->manifest.id, L"system_monitor")) name = app_names[5];
+    
+    // Copy to content
+    UINTN i = 0;
+    while (name[i] != 0 && i < 30) {
+        instance->content[i] = name[i];
+        i++;
     }
-
-    // Clear clip after rendering so other renders aren't affected
-    sdk_graphics_clear_clip();
+    instance->content[i] = 0;
+    instance->content_len = (UINT32)i;
+    
+    (void)wm_set_window_content(instance->window_id, instance->content);
 
     return TRUE;
 }
