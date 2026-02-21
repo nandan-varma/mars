@@ -27,7 +27,7 @@ typedef struct {
 } process_t;
 
 void process_init(void);
-UINT32 process_create_kernel(const CHAR16 *name, task_entry_t entry, void *context, UINT8 priority, UINT32 capabilities);
+UINT32 process_create_kernel(const CHAR16 *name, task_entry_t entry, void *context, UINT8 priority, UINT32 capabilities, BOOLEAN is_kernel);
 void process_exit(UINT32 pid, INT32 exit_code);
 BOOLEAN process_wait(UINT32 pid, INT32 *out_exit_code);
 UINT32 process_current_pid(void);

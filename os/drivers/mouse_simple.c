@@ -26,8 +26,20 @@ UINTN poll_simple_pointer(input_event_t *events_out, UINTN max_events) {
         }
 
         if (dx != 0 || dy != 0) {
-            g_mouse_x = clamp(g_mouse_x + dx, 0, g_screen_w - 1);
-            g_mouse_y = clamp(g_mouse_y + dy, 0, g_screen_h - 1);
+            INT32 new_x = g_mouse_x + dx;
+            INT32 new_y = g_mouse_y + dy;
+            if (dx > 0 && new_x < g_mouse_x) {
+                new_x = INT32_MAX;
+            } else if (dx < 0 && new_x > g_mouse_x) {
+                new_x = INT32_MIN;
+            }
+            if (dy > 0 && new_y < g_mouse_y) {
+                new_y = INT32_MAX;
+            } else if (dy < 0 && new_y > g_mouse_y) {
+                new_y = INT32_MIN;
+            }
+            g_mouse_x = clamp(new_x, 0, g_screen_w - 1);
+            g_mouse_y = clamp(new_y, 0, g_screen_h - 1);
 
             events_out[event_count].type = INPUT_EVENT_MOUSE_MOVE;
             events_out[event_count].data.mouse_move.dx = dx;

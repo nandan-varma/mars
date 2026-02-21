@@ -74,7 +74,7 @@ BOOLEAN app_instance_launch(const CHAR16 *id, app_task_entry_t entry, app_conten
         instance->history_len = 0;
         instance->input_line[0] = 0;
         instance->input_len = 0;
-        instance->pid = process_create_kernel(instance->manifest.title, entry, instance, 1, instance->manifest.capabilities);
+        instance->pid = process_create_kernel(instance->manifest.title, entry, instance, 1, instance->manifest.capabilities, FALSE);
         if (instance->pid == 0) {
             return FALSE;
         }

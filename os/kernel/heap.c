@@ -30,8 +30,14 @@ void heap_init(UINTN initial_pages) {
         return;
     }
 
+    UINTN total = initial_pages * PAGE_SIZE;
+    if (total / PAGE_SIZE != initial_pages) {
+        (void)memory_release_pages(region, initial_pages);
+        return;
+    }
+
     g_heap_base = (UINT8 *)(UINTN)region;
-    g_heap_total = initial_pages * PAGE_SIZE;
+    g_heap_total = total;
 }
 
 void *heap_alloc(UINTN size) {
@@ -40,7 +46,7 @@ void *heap_alloc(UINTN size) {
     }
 
     UINTN offset = align_up(g_heap_used, HEAP_ALIGNMENT);
-    if (offset + size > g_heap_total) {
+    if (offset > g_heap_total || size > g_heap_total - offset) {
         return NULL;
     }
 

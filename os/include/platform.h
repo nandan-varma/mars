@@ -11,7 +11,8 @@ typedef struct {
     EFI_RUNTIME_SERVICES *runtime_services;
 } platform_context_t;
 
-void platform_init_from_boot(const boot_info_t *boot_info);
+BOOLEAN platform_init_from_boot(const boot_info_t *boot_info);
 const platform_context_t *platform_context(void);
+BOOLEAN platform_is_initialized(void);
 
 #endif

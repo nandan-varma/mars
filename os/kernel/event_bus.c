@@ -19,6 +19,10 @@ BOOLEAN event_bus_publish(const event_packet_t *packet) {
         return FALSE;
     }
 
+    if (packet->payload_size > EVENT_PAYLOAD_BYTES) {
+        return FALSE;
+    }
+
     BOOLEAN accepted = FALSE;
 
     if (packet->channel < EVENT_CHANNEL_COUNT) {

@@ -74,7 +74,7 @@ static BOOLEAN spawn_managed_process(managed_process_t *managed) {
         return FALSE;
     }
 
-    managed->pid = process_create_kernel(managed->name, managed->entry, NULL, managed->priority, managed->capabilities);
+    managed->pid = process_create_kernel(managed->name, managed->entry, NULL, managed->priority, managed->capabilities, TRUE);
     if (managed->pid == 0) {
         diag_log(0x610U, 1, (UINT64)managed->priority, managed->capabilities);
         return FALSE;
@@ -195,7 +195,7 @@ static BOOLEAN stage_services_and_apps(const platform_context_t *platform) {
         (void)spawn_managed_process(&g_managed_processes[i]);
     }
 
-    UINT32 supervisor_pid = process_create_kernel(L"service-supervisor", supervisor_task, NULL, 1, CAP_SYSTEM);
+    UINT32 supervisor_pid = process_create_kernel(L"service-supervisor", supervisor_task, NULL, 1, CAP_SYSTEM, TRUE);
     (void)supervisor_pid;
 
     app_framework_init();

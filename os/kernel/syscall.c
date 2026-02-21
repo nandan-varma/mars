@@ -17,6 +17,16 @@ static UINT64 syscall_nop(UINT64 a, UINT64 b, UINT64 c, UINT64 d) {
 }
 
 static UINT64 syscall_log_handler(UINT64 domain, UINT64 code, UINT64 a, UINT64 b) {
+    UINT32 pid = process_current_pid();
+    if (pid == 0) {
+        return 1;
+    }
+
+    UINT32 caps = process_capabilities(pid);
+    if ((caps & CAP_GRAPHICS) == 0) {
+        return 2;
+    }
+
     diag_log((UINT32)domain, (UINT32)code, a, b);
     return 0;
 }
@@ -63,6 +73,17 @@ static UINT64 syscall_get_ticks_handler(UINT64 a, UINT64 b, UINT64 c, UINT64 d) 
     (void)b;
     (void)c;
     (void)d;
+
+    UINT32 pid = process_current_pid();
+    if (pid == 0) {
+        return 1;
+    }
+
+    UINT32 caps = process_capabilities(pid);
+    if ((caps & CAP_SYSTEM) == 0) {
+        return 2;
+    }
+
     return timer_ticks();
 }
 

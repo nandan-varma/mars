@@ -37,15 +37,15 @@ int main(void) {
 
     UINT32 pids[64];
     for (int i = 0; i < 64; ++i) {
-        pids[i] = process_create_kernel(name_p, noop_task, NULL, 1, CAP_SYSTEM);
+        pids[i] = process_create_kernel(name_p, noop_task, NULL, 1, CAP_SYSTEM, TRUE);
         assert(pids[i] != 0);
     }
 
-    UINT32 overflow = process_create_kernel(name_overflow, noop_task, NULL, 1, CAP_SYSTEM);
+    UINT32 overflow = process_create_kernel(name_overflow, noop_task, NULL, 1, CAP_SYSTEM, TRUE);
     assert(overflow == 0);
 
     process_exit(pids[10], 0);
-    UINT32 reused = process_create_kernel(name_reused, noop_task, NULL, 1, CAP_SYSTEM);
+    UINT32 reused = process_create_kernel(name_reused, noop_task, NULL, 1, CAP_SYSTEM, TRUE);
     assert(reused != 0);
 
     printf("process slot reuse test passed\n");

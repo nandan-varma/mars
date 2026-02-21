@@ -71,7 +71,11 @@ void vm_init(const platform_context_t *platform) {
         return;
     }
 
-    UINT64 framebuffer_end = (UINT64)platform->framebuffer.base + (UINT64)platform->framebuffer.size;
+    if (platform->framebuffer.base > UINT64_MAX - platform->framebuffer.size) {
+        return;
+    }
+
+    UINT64 framebuffer_end = platform->framebuffer.base + platform->framebuffer.size;
     UINT64 requested_span = max_u64(FOUR_GIB, framebuffer_end);
 
     UINT64 max_span = (UINT64)VM_MAX_PDPT * ONE_GIB;

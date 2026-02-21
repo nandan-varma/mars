@@ -22,6 +22,22 @@ void memory_pages_add_region(EFI_PHYSICAL_ADDRESS base, UINTN pages) {
         return;
     }
 
+    if ((base & (PAGE_SIZE - 1)) != 0) {
+        return;
+    }
+
+    EFI_PHYSICAL_ADDRESS end = base + (EFI_PHYSICAL_ADDRESS)pages * PAGE_SIZE;
+    if (end < base) {
+        return;
+    }
+
+    for (UINTN i = 0; i < g_region_count; ++i) {
+        EFI_PHYSICAL_ADDRESS existing_end = g_regions[i].base + (EFI_PHYSICAL_ADDRESS)g_regions[i].pages * PAGE_SIZE;
+        if (!(end <= g_regions[i].base || base >= existing_end)) {
+            return;
+        }
+    }
+
     g_regions[g_region_count].base = base;
     g_regions[g_region_count].pages = pages;
     g_regions[g_region_count].used = 0;

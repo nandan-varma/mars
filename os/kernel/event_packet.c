@@ -1,6 +1,10 @@
 #include "event_packet.h"
 
 void event_packet_copy(event_packet_t *dst, const event_packet_t *src) {
+    if (dst == NULL || src == NULL) {
+        return;
+    }
+
     const UINT8 *src_bytes = (const UINT8 *)src;
     UINT8 *dst_bytes = (UINT8 *)dst;
     for (UINTN i = 0; i < sizeof(event_packet_t); ++i) {

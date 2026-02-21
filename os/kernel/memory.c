@@ -66,8 +66,11 @@ EFI_PHYSICAL_ADDRESS memory_alloc_pages(UINTN page_count) {
 
     if (!memory_freelist_track_active(address, page_count)) {
         if (address != 0) {
-            (void)memory_freelist_push(address, page_count);
-            memory_freelist_merge();
+            if (!memory_freelist_push(address, page_count)) {
+                memory_freelist_merge();
+                if (!memory_freelist_push(address, page_count)) {
+                }
+            }
         }
         return 0;
     }

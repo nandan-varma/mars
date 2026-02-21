@@ -76,23 +76,23 @@ void memory_freelist_merge(void) {
             continue;
         }
 
-        EFI_PHYSICAL_ADDRESS i_end = g_free_blocks[i].base + (EFI_PHYSICAL_ADDRESS)(g_free_blocks[i].pages * PAGE_SIZE);
+        EFI_PHYSICAL_ADDRESS i_end = g_free_blocks[i].base + (EFI_PHYSICAL_ADDRESS)((UINT64)g_free_blocks[i].pages * PAGE_SIZE);
 
         for (UINTN j = 0; j < MAX_FREE_BLOCKS; ++j) {
             if (i == j || !g_free_blocks[j].active) {
                 continue;
             }
 
-            EFI_PHYSICAL_ADDRESS j_end = g_free_blocks[j].base + (EFI_PHYSICAL_ADDRESS)(g_free_blocks[j].pages * PAGE_SIZE);
+            EFI_PHYSICAL_ADDRESS j_end = g_free_blocks[j].base + (EFI_PHYSICAL_ADDRESS)((UINT64)g_free_blocks[j].pages * PAGE_SIZE);
             if (i_end == g_free_blocks[j].base) {
                 g_free_blocks[i].pages += g_free_blocks[j].pages;
                 g_free_blocks[j].active = FALSE;
-                i_end = g_free_blocks[i].base + (EFI_PHYSICAL_ADDRESS)(g_free_blocks[i].pages * PAGE_SIZE);
+                i_end = g_free_blocks[i].base + (EFI_PHYSICAL_ADDRESS)((UINT64)g_free_blocks[i].pages * PAGE_SIZE);
             } else if (j_end == g_free_blocks[i].base) {
                 g_free_blocks[i].base = g_free_blocks[j].base;
                 g_free_blocks[i].pages += g_free_blocks[j].pages;
                 g_free_blocks[j].active = FALSE;
-                i_end = g_free_blocks[i].base + (EFI_PHYSICAL_ADDRESS)(g_free_blocks[i].pages * PAGE_SIZE);
+                i_end = g_free_blocks[i].base + (EFI_PHYSICAL_ADDRESS)((UINT64)g_free_blocks[i].pages * PAGE_SIZE);
             }
         }
     }

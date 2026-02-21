@@ -512,6 +512,14 @@ static BOOLEAN app_manager_task(void *context) {
     UINTN processed = 0;
     while (processed < APP_EVENTS_PER_STEP && event_bus_receive_channel(EVENT_CHANNEL_SYSTEM, &packet)) {
         if (packet.code == EVENT_CODE_APP_LAUNCH_REQUEST && packet.payload_size >= sizeof(CHAR16)) {
+            if (packet.source_pid != 0) {
+                UINT32 caps = process_capabilities(packet.source_pid);
+                if ((caps & CAP_SYSTEM) == 0) {
+                    ++processed;
+                    continue;
+                }
+            }
+
             CHAR16 id[24];
             UINTN id_bytes = packet.payload_size;
             if (id_bytes > sizeof(id) - sizeof(CHAR16)) {
@@ -541,7 +549,7 @@ void app_framework_init(void) {
     app_registry_init();
     app_instance_init();
     g_app_manager_pid = 0;
-    g_app_manager_pid = process_create_kernel(L"app-manager", app_manager_task, NULL, 1, CAP_SYSTEM);
+    g_app_manager_pid = process_create_kernel(L"app-manager", app_manager_task, NULL, 1, CAP_SYSTEM, TRUE);
 }
 
 BOOLEAN app_register(const app_manifest_t *manifest) {

@@ -41,9 +41,13 @@ void process_init(void) {
     }
 }
 
-UINT32 process_create_kernel(const CHAR16 *name, task_entry_t entry, void *context, UINT8 priority, UINT32 capabilities) {
+UINT32 process_create_kernel(const CHAR16 *name, task_entry_t entry, void *context, UINT8 priority, UINT32 capabilities, BOOLEAN is_kernel) {
     if (entry == NULL) {
         return 0;
+    }
+
+    if (!is_kernel && (capabilities & CAP_SYSTEM) != 0) {
+        capabilities &= ~CAP_SYSTEM;
     }
 
     process_t *process = find_reusable_slot();
@@ -82,6 +86,7 @@ void process_exit(UINT32 pid, INT32 exit_code) {
 
     process->state = PROCESS_TERMINATED;
     process->exit_code = exit_code;
+    process->pid = 0;
     scheduler_stop_task(process->task_id);
     process->task_id = 0;
     if (process->vm_root != 0 && process->vm_root != vm_pml4_physical()) {
