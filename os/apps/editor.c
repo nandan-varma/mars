@@ -1,4 +1,5 @@
 #include "uefi.h"
+#include "heap.h"
 #include "sdk/sdk_core.h"
 #include "sdk/sdk_graphics.h"
 #include "sdk/sdk_input.h"
@@ -17,6 +18,7 @@ typedef struct {
 static editor_state_t *g_editor_state = NULL;
 
 BOOLEAN editor_init(UINT32 window_id) {
+    (void)window_id;
     g_editor_state = (editor_state_t *)heap_alloc(sizeof(editor_state_t));
     if (g_editor_state == NULL) {
         return FALSE;
@@ -58,7 +60,7 @@ void editor_render(void) {
     sdk_graphics_text(150, 10, L"(Type to edit, scroll with slider)", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
     
     // Draw line numbers on the left
-    sdk_graphics_line(35, 35, 35, 345, 1, SDK_COLOR_BORDER);
+    sdk_graphics_line(35, 35, 35, 345, SDK_COLOR_BORDER);
     sdk_graphics_text(12, 45, L"1", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
     sdk_graphics_text(12, 85, L"2", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
     sdk_graphics_text(12, 125, L"3", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
@@ -92,6 +94,6 @@ void editor_cleanup(void) {
         sdk_component_destroy(g_editor_state->scroll_slider);
     }
     
-    heap_free((EFI_PHYSICAL_ADDRESS)(UINTN)g_editor_state);
+    heap_free(g_editor_state);
     g_editor_state = NULL;
 }

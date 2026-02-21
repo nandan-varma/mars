@@ -188,6 +188,7 @@ static BOOLEAN on_clear_click(sdk_component_t *button) {
 // ============================================================================
 
 BOOLEAN calculator_init(UINT32 window_id) {
+    (void)window_id;
     g_calc_state = (calculator_state_t *)heap_alloc(sizeof(calculator_state_t));
     if (g_calc_state == NULL) {
         return FALSE;
@@ -351,7 +352,7 @@ void calculator_cleanup(void) {
         sdk_component_destroy(g_calc_state->clear_button);
     }
     
-    heap_free((EFI_PHYSICAL_ADDRESS)(UINTN)g_calc_state);
+    heap_free(g_calc_state);
     g_calc_state = NULL;
 }
 

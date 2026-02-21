@@ -4,6 +4,7 @@
 // Demonstrates file browsing with list of sample files
 
 #include "uefi.h"
+#include "heap.h"
 #include "sdk/sdk_core.h"
 #include "sdk/sdk_graphics.h"
 #include "sdk/sdk_input.h"
@@ -23,50 +24,61 @@ typedef struct {
 
 static file_manager_state_t *g_fm_state = NULL;
 
+// Simple string copy helper
+static void copy_str16(CHAR16 *dst, const CHAR16 *src) {
+    UINTN i = 0;
+    while (src[i] != 0 && i < 63) {
+        dst[i] = src[i];
+        i++;
+    }
+    dst[i] = 0;
+}
+
 // Initialize file list with sample files
 static void file_manager_init_files(file_manager_state_t *state) {
     state->file_count = 0;
     state->selected_index = 0;
     
     // Add some sample files
-    os_strcpy16(state->files[state->file_count].name, L"[..]");
+    copy_str16(state->files[state->file_count].name, L"[..]");
     state->files[state->file_count].is_directory = TRUE;
     state->files[state->file_count].size = 0;
     state->file_count++;
     
-    os_strcpy16(state->files[state->file_count].name, L"Documents");
+    copy_str16(state->files[state->file_count].name, L"Documents");
     state->files[state->file_count].is_directory = TRUE;
     state->files[state->file_count].size = 0;
     state->file_count++;
     
-    os_strcpy16(state->files[state->file_count].name, L"Photos");
+    copy_str16(state->files[state->file_count].name, L"Photos");
     state->files[state->file_count].is_directory = TRUE;
     state->files[state->file_count].size = 0;
     state->file_count++;
     
-    os_strcpy16(state->files[state->file_count].name, L"readme.txt");
+    copy_str16(state->files[state->file_count].name, L"readme.txt");
     state->files[state->file_count].is_directory = FALSE;
     state->files[state->file_count].size = 1024;
     state->file_count++;
     
-    os_strcpy16(state->files[state->file_count].name, L"config.sys");
+    copy_str16(state->files[state->file_count].name, L"config.sys");
     state->files[state->file_count].is_directory = FALSE;
     state->files[state->file_count].size = 512;
     state->file_count++;
     
-    os_strcpy16(state->files[state->file_count].name, L"data.bin");
+    copy_str16(state->files[state->file_count].name, L"data.bin");
     state->files[state->file_count].is_directory = FALSE;
     state->files[state->file_count].size = 4096;
     state->file_count++;
 }
 
 BOOLEAN file_manager_init(UINT32 window_id) {
+    (void)window_id;
     g_fm_state = (file_manager_state_t *)heap_alloc(sizeof(file_manager_state_t));
     if (g_fm_state == NULL) {
         return FALSE;
     }
     
-    os_strcpy16(g_fm_state->current_path, L"FS0:\\");
+    copy_str16(g_fm_state->current_path, L"FS0:\\");
     file_manager_init_files(g_fm_state);
     
     return TRUE;
@@ -87,11 +99,12 @@ void file_manager_render(void) {
     // Draw file list
     INT32 y = 65;
     for (UINTN i = 0; i < g_fm_state->file_count && i < 20; i++) {
-        UINT32 bg_color = (i == g_fm_state->selected_index) ? SDK_COLOR_BUTTON_HOVER : SDK_COLOR_BG_LIGHT;
-        UINT32 fg_color = (i == g_fm_state->selected_index) ? SDK_COLOR_WHITE : SDK_COLOR_TEXT_PRIMARY;
+        INT32 selected = (INT32)i;
+        UINT32 bg_color = (selected == g_fm_state->selected_index) ? SDK_COLOR_TEXT_PRIMARY : SDK_COLOR_BG_LIGHT;
+        UINT32 fg_color = (selected == g_fm_state->selected_index) ? SDK_COLOR_BG_LIGHT : SDK_COLOR_TEXT_PRIMARY;
         
         // Draw selection background
-        if (i == g_fm_state->selected_index) {
+        if (selected == g_fm_state->selected_index) {
             sdk_graphics_rect(10, y - 2, 500, 18, bg_color);
         }
         
@@ -139,7 +152,7 @@ void file_manager_handle_input(const input_event_t *event) {
             // Handle enter to open
             if (g_fm_state->files[g_fm_state->selected_index].is_directory) {
                 // Navigate into directory
-                os_strcpy16(g_fm_state->current_path, g_fm_state->files[g_fm_state->selected_index].name);
+                copy_str16(g_fm_state->current_path, g_fm_state->files[g_fm_state->selected_index].name);
             }
         }
     }
@@ -147,7 +160,7 @@ void file_manager_handle_input(const input_event_t *event) {
 
 void file_manager_cleanup(void) {
     if (g_fm_state != NULL) {
-        heap_free((EFI_PHYSICAL_ADDRESS)(UINTN)g_fm_state);
+        heap_free(g_fm_state);
         g_fm_state = NULL;
     }
 }

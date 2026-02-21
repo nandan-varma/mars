@@ -112,6 +112,12 @@ SRCS := \
 	kernel/app_console_cmd.c \
 	kernel/app_registry.c \
 	kernel/app_instance.c \
+	apps/calculator.c \
+	apps/paint.c \
+	apps/editor.c \
+	apps/settings.c \
+	apps/file_manager.c \
+	apps/system_monitor.c \
 	kernel/vfs.c \
 	drivers/input.c \
 	drivers/keyboard_uefi.c \

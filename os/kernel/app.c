@@ -12,6 +12,12 @@
 #include "vfs.h"
 #include "wm.h"
 
+#include "sdk/sdk_core.h"
+#include "sdk/sdk_graphics.h"
+#include "sdk/sdk_input.h"
+#include "sdk/sdk_ui.h"
+#include "sdk/sdk_app.h"
+
 #define APP_MAX_TASK_LINES 6
 #define APP_MAX_LOG_LINES 8
 
@@ -42,6 +48,34 @@ static BOOLEAN equals_chars(const CHAR16 *a, const CHAR16 *b) {
         ++i;
     }
 }
+
+// ============================================================================
+// SDK App Forward Declarations
+// ============================================================================
+
+extern BOOLEAN calculator_init(UINT32 window_id);
+extern void calculator_render(void);
+extern void calculator_handle_input(const input_event_t *event);
+
+extern BOOLEAN paint_init(UINT32 window_id);
+extern void paint_render(void);
+extern void paint_handle_input(const input_event_t *event);
+
+extern BOOLEAN editor_init(UINT32 window_id);
+extern void editor_render(void);
+extern void editor_handle_input(const input_event_t *event);
+
+extern BOOLEAN settings_init(UINT32 window_id);
+extern void settings_render(void);
+extern void settings_handle_input(const input_event_t *event);
+
+extern BOOLEAN file_manager_init(UINT32 window_id);
+extern void file_manager_render(void);
+extern void file_manager_handle_input(const input_event_t *event);
+
+extern BOOLEAN system_monitor_init(UINT32 window_id);
+extern void system_monitor_render(void);
+extern void system_monitor_handle_input(const input_event_t *event);
 
 static UINTN text_length(const CHAR16 *text, UINTN max_chars) {
     if (text == NULL) {
@@ -558,7 +592,110 @@ BOOLEAN app_register(const app_manifest_t *manifest) {
     return app_registry_register(manifest);
 }
 
+// ============================================================================
+// SDK App Task Implementation
+// ============================================================================
+
+static BOOLEAN sdk_app_task(void *context) {
+    app_instance_t *instance = (app_instance_t *)context;
+    if (instance == NULL) {
+        return FALSE;
+    }
+
+    // Use first byte of history to track initialization
+    BOOLEAN *initialized = (BOOLEAN *)&instance->history[0];
+    
+    // Initialize on first run
+    if (!*initialized) {
+        BOOLEAN (*init_fn)(UINT32) = NULL;
+
+        if (equals_chars(instance->manifest.id, L"calculator")) {
+            init_fn = calculator_init;
+        } else if (equals_chars(instance->manifest.id, L"paint")) {
+            init_fn = paint_init;
+        } else if (equals_chars(instance->manifest.id, L"editor")) {
+            init_fn = editor_init;
+        } else if (equals_chars(instance->manifest.id, L"settings")) {
+            init_fn = settings_init;
+        } else if (equals_chars(instance->manifest.id, L"file_manager")) {
+            init_fn = file_manager_init;
+        } else if (equals_chars(instance->manifest.id, L"system_monitor")) {
+            init_fn = system_monitor_init;
+        }
+
+        if (init_fn != NULL && init_fn(instance->window_id)) {
+            *initialized = TRUE;
+        } else {
+            return FALSE;
+        }
+    }
+
+    // Handle input events
+    event_packet_t packet;
+    UINTN processed = 0;
+    while (processed < APP_EVENTS_PER_STEP && event_bus_receive(instance->pid, &packet)) {
+        if (packet.code == EVENT_CODE_APP_INPUT && packet.payload_size == sizeof(input_event_t)) {
+            input_event_t input;
+            UINT8 *dst = (UINT8 *)&input;
+            for (UINTN i = 0; i < sizeof(input_event_t); ++i) {
+                dst[i] = packet.payload[i];
+            }
+
+            // Dispatch input to appropriate app
+            if (equals_chars(instance->manifest.id, L"calculator")) {
+                calculator_handle_input(&input);
+            } else if (equals_chars(instance->manifest.id, L"paint")) {
+                paint_handle_input(&input);
+            } else if (equals_chars(instance->manifest.id, L"editor")) {
+                editor_handle_input(&input);
+            } else if (equals_chars(instance->manifest.id, L"settings")) {
+                settings_handle_input(&input);
+            } else if (equals_chars(instance->manifest.id, L"file_manager")) {
+                file_manager_handle_input(&input);
+            } else if (equals_chars(instance->manifest.id, L"system_monitor")) {
+                system_monitor_handle_input(&input);
+            }
+        }
+        ++processed;
+    }
+
+    // Render current frame
+    if (equals_chars(instance->manifest.id, L"calculator")) {
+        calculator_render();
+    } else if (equals_chars(instance->manifest.id, L"paint")) {
+        paint_render();
+    } else if (equals_chars(instance->manifest.id, L"editor")) {
+        editor_render();
+    } else if (equals_chars(instance->manifest.id, L"settings")) {
+        settings_render();
+    } else if (equals_chars(instance->manifest.id, L"file_manager")) {
+        file_manager_render();
+    } else if (equals_chars(instance->manifest.id, L"system_monitor")) {
+        system_monitor_render();
+    }
+
+    return TRUE;
+}
+
+static void set_sdk_app_content(app_instance_t *instance) {
+    if (instance == NULL) {
+        return;
+    }
+    instance->content[0] = 0;
+    instance->content_len = 0;
+    instance->history[0] = 0;
+    instance->history_len = 0;
+    reset_input(instance);
+}
+
 BOOLEAN app_launch(const CHAR16 *id) {
+    // Check if this is an SDK app
+    if (equals_chars(id, L"calculator") || equals_chars(id, L"paint") ||
+        equals_chars(id, L"editor") || equals_chars(id, L"settings") ||
+        equals_chars(id, L"file_manager") || equals_chars(id, L"system_monitor")) {
+        return app_instance_launch(id, sdk_app_task, set_sdk_app_content);
+    }
+    // Legacy console apps
     return app_instance_launch(id, app_task_step, set_default_content);
 }
 

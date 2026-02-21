@@ -8,12 +8,12 @@
 static wm_state_t g_state;
 
 static const start_item_t g_start_items[START_MENU_ITEM_COUNT] = {
-    { L"shell", L"System Shell" },
-    { L"files", L"File Browser" },
-    { L"term", L"Terminal" },
+    { L"calculator", L"Calculator" },
+    { L"paint", L"Paint" },
+    { L"editor", L"Text Editor" },
+    { L"file_manager", L"File Manager" },
     { L"settings", L"Settings" },
-    { L"tasks", L"Task Manager" },
-    { L"logs", L"System Logs" }
+    { L"system_monitor", L"System Monitor" }
 };
 
 wm_state_t *wm_state(void) {

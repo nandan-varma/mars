@@ -1,4 +1,5 @@
 #include "uefi.h"
+#include "heap.h"
 #include "sdk/sdk_core.h"
 #include "sdk/sdk_graphics.h"
 #include "sdk/sdk_input.h"
@@ -17,6 +18,7 @@ typedef struct {
 static paint_state_t *g_paint_state = NULL;
 
 BOOLEAN paint_init(UINT32 window_id) {
+    (void)window_id;
     g_paint_state = (paint_state_t *)heap_alloc(sizeof(paint_state_t));
     if (g_paint_state == NULL) {
         return FALSE;
@@ -53,7 +55,7 @@ void paint_handle_input(const input_event_t *event) {
             if (g_paint_state->drawing && g_paint_state->last_x >= 0) {
                 // Draw line from last position to current position for smooth strokes
                 sdk_graphics_line(g_paint_state->last_x, g_paint_state->last_y, 
-                                x, y, g_paint_state->brush_size, g_paint_state->current_color);
+                                x, y, g_paint_state->current_color);
             } else {
                 // Start drawing
                 sdk_graphics_circle(x, y, g_paint_state->brush_size, g_paint_state->current_color);
@@ -72,7 +74,7 @@ void paint_handle_input(const input_event_t *event) {
 
 void paint_cleanup(void) {
     if (g_paint_state != NULL) {
-        heap_free((EFI_PHYSICAL_ADDRESS)(UINTN)g_paint_state);
+        heap_free(g_paint_state);
         g_paint_state = NULL;
     }
 }

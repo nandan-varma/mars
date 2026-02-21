@@ -11,10 +11,12 @@ SDK_LIBRARY = libmarssdk.a
 
 # Include paths relative to os/lib/sdk directory
 INCLUDE_FLAGS = -I../../include -I../../include/sdk
-CFLAGS += $(INCLUDE_FLAGS) -ffreestanding -fshort-wchar -fno-stack-protector -mno-red-zone -Wall -Wextra -Werror
 
-CC ?= cc
-AR ?= ar
+# Use MinGW for consistent symbol names with kernel
+CC := /opt/homebrew/bin/x86_64-w64-mingw32-gcc
+AR := /opt/homebrew/bin/x86_64-w64-mingw32-ar
+
+CFLAGS += $(INCLUDE_FLAGS) -ffreestanding -fshort-wchar -fno-stack-protector -mno-red-zone -Wall -Wextra -Werror -O2
 
 .PHONY: all clean
 
