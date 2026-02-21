@@ -25,11 +25,24 @@ void event_packet_copy_payload(UINT8 *dst, const UINT8 *src, UINTN size, UINTN m
         copy = max_size;
     }
 
-    UINTN i = 0;
-    for (; i < copy; ++i) {
-        dst[i] = src[i];
+    // PERFORMANCE FIX: Use word-aligned copy for payload data
+    // Most payloads are >= 8 bytes; copy using 64-bit words where possible
+    UINTN qword_count = copy / sizeof(UINT64);
+    const UINT64 *src_qwords = (const UINT64 *)src;
+    UINT64 *dst_qwords = (UINT64 *)dst;
+    for (UINTN i = 0; i < qword_count; ++i) {
+        dst_qwords[i] = src_qwords[i];
     }
-    for (; i < max_size; ++i) {
+    
+    // Copy remaining bytes
+    UINTN remaining = copy % sizeof(UINT64);
+    UINTN offset = qword_count * sizeof(UINT64);
+    for (UINTN i = 0; i < remaining; ++i) {
+        dst[offset + i] = src[offset + i];
+    }
+    
+    // Zero-fill rest of max_size
+    for (UINTN i = copy; i < max_size; ++i) {
         dst[i] = 0;
     }
 }
