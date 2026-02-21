@@ -137,7 +137,11 @@ HOST_TEST_BINS := \
 	$(BUILD_DIR)/tests/test_event_bus_contract \
 	$(BUILD_DIR)/tests/test_scheduler_fairness \
 	$(BUILD_DIR)/tests/test_process_slot_reuse \
-	$(BUILD_DIR)/tests/test_input_bounds
+	$(BUILD_DIR)/tests/test_input_bounds \
+	$(BUILD_DIR)/tests/test_heap \
+	$(BUILD_DIR)/tests/test_freelist \
+	$(BUILD_DIR)/tests/test_vm_builder \
+	$(BUILD_DIR)/tests/test_vm
 
 all: $(TARGET_EFI) user-apps disk-image
 
@@ -246,6 +250,22 @@ $(BUILD_DIR)/tests/test_process_slot_reuse: tests/test_process_slot_reuse.c kern
 	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
 
 $(BUILD_DIR)/tests/test_input_bounds: tests/test_input_bounds.c drivers/input.c kernel/spinlock.c
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
+
+$(BUILD_DIR)/tests/test_heap: tests/test_heap.c
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
+
+$(BUILD_DIR)/tests/test_freelist: tests/test_freelist.c
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
+
+$(BUILD_DIR)/tests/test_vm_builder: tests/test_vm_builder.c
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
+
+$(BUILD_DIR)/tests/test_vm: tests/test_vm.c
 	@mkdir -p $(dir $@)
 	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
 
