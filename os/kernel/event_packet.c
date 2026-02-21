@@ -5,10 +5,13 @@ void event_packet_copy(event_packet_t *dst, const event_packet_t *src) {
         return;
     }
 
-    const UINT8 *src_bytes = (const UINT8 *)src;
-    UINT8 *dst_bytes = (UINT8 *)dst;
-    for (UINTN i = 0; i < sizeof(event_packet_t); ++i) {
-        dst_bytes[i] = src_bytes[i];
+    // PERFORMANCE FIX (Issue 2.1): Replace byte-by-byte loop with word-aligned copy
+    // event_packet_t is 128 bytes; copying as 16 × 64-bit words = ~16x faster
+    // (compiler may use SIMD/memcpy intrinsics for aligned data)
+    const UINT64 *src_qwords = (const UINT64 *)src;
+    UINT64 *dst_qwords = (UINT64 *)dst;
+    for (UINTN i = 0; i < sizeof(event_packet_t) / sizeof(UINT64); ++i) {
+        dst_qwords[i] = src_qwords[i];
     }
 }
 
