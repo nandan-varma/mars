@@ -4,12 +4,42 @@
 #include "sdk/sdk_core.h"
 
 // ============================================================================
+// Clip Region (for window bounds)
+// ============================================================================
+
+static BOOLEAN g_clip_enabled = FALSE;
+static INT32 g_clip_x = 0;
+static INT32 g_clip_y = 0;
+static INT32 g_clip_width = 0;
+static INT32 g_clip_height = 0;
+
+// ============================================================================
 // Graphics Initialization
 // ============================================================================
 
 void sdk_graphics_init(void) {
     // Framebuffer is already initialized by kernel
-    // No additional initialization needed
+    g_clip_enabled = FALSE;
+}
+
+// ============================================================================
+// Clip Region
+// ============================================================================
+
+void sdk_graphics_set_clip(INT32 x, INT32 y, INT32 width, INT32 height) {
+    if (width <= 0 || height <= 0) {
+        g_clip_enabled = FALSE;
+        return;
+    }
+    g_clip_x = x;
+    g_clip_y = y;
+    g_clip_width = width;
+    g_clip_height = height;
+    g_clip_enabled = TRUE;
+}
+
+void sdk_graphics_clear_clip(void) {
+    g_clip_enabled = FALSE;
 }
 
 // ============================================================================

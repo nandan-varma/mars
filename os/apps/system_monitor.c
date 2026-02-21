@@ -75,8 +75,6 @@ void system_monitor_render(void) {
     sdk_graphics_text(20, 240, L"Uptime: Running", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
     
     g_monitor_state->uptime_ticks++;
-    
-    sdk_graphics_present();
 }
 
 void system_monitor_handle_input(const input_event_t *event) {

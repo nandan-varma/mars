@@ -67,6 +67,10 @@ wm_window_t *wm_find_window(UINT32 id) {
     return NULL;
 }
 
+const wm_window_t* wm_get_window(UINT32 id) {
+    return (const wm_window_t*)wm_find_window(id);
+}
+
 UINTN wm_window_index_by_id(UINT32 id) {
     wm_state_t *state = wm_state();
     for (UINTN i = 0; i < state->window_count; ++i) {

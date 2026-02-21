@@ -123,8 +123,6 @@ void file_manager_render(void) {
     
     // Draw instructions
     sdk_graphics_text(10, 500, L"UP/DOWN: Navigate | ENTER: Open | ESC: Back", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
-    
-    sdk_graphics_present();
 }
 
 void file_manager_handle_input(const input_event_t *event) {

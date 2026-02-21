@@ -77,6 +77,13 @@ void sdk_graphics_shadow(INT32 x, INT32 y, INT32 w, INT32 h, INT32 blur_size, UI
 // Buffering & Presentation
 // ============================================================================
 
+// Set clip region for drawing (window bounds)
+// All subsequent drawing will be clipped to this region
+void sdk_graphics_set_clip(INT32 x, INT32 y, INT32 width, INT32 height);
+
+// Clear clip region to full screen
+void sdk_graphics_clear_clip(void);
+
 // Flush backbuffer to frontbuffer
 void sdk_graphics_present(void);
 

@@ -659,7 +659,13 @@ static BOOLEAN sdk_app_task(void *context) {
         ++processed;
     }
 
-    // Render current frame
+    // Render current frame - set clip to window bounds first
+    const wm_window_t *win = wm_get_window(instance->window_id);
+    if (win != NULL) {
+        // Client area: x+8, y+30, width-16, height-38
+        sdk_graphics_set_clip(win->x + 8, win->y + 30, win->width - 16, win->height - 38);
+    }
+    
     if (equals_chars(instance->manifest.id, L"calculator")) {
         calculator_render();
     } else if (equals_chars(instance->manifest.id, L"paint")) {

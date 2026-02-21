@@ -69,8 +69,6 @@ void settings_render(void) {
     // Volume slider
     sdk_graphics_text(20, 110, L"Volume:", SDK_COLOR_TEXT_PRIMARY, SDK_COLOR_BG_LIGHT);
     sdk_component_render(g_settings_state->volume_slider);
-    
-    sdk_graphics_present();
 }
 
 void settings_handle_input(const input_event_t *event) {

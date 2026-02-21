@@ -69,8 +69,6 @@ void editor_render(void) {
     
     sdk_component_render(g_editor_state->text_field);
     sdk_component_render(g_editor_state->scroll_slider);
-    
-    sdk_graphics_present();
 }
 
 void editor_handle_input(const input_event_t *event) {

@@ -27,5 +27,6 @@ BOOLEAN wm_focus_window(UINT32 window_id);
 BOOLEAN wm_set_window_content(UINT32 window_id, const CHAR16 *text);
 void wm_set_debug_overlay(BOOLEAN enabled);
 BOOLEAN wm_debug_overlay_enabled(void);
+const wm_window_t* wm_get_window(UINT32 window_id);
 
 #endif

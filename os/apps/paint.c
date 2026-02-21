@@ -41,7 +41,6 @@ void paint_render(void) {
     sdk_graphics_clear(SDK_COLOR_WHITE);
     sdk_graphics_text(10, 10, L"Paint - Draw with mouse", SDK_COLOR_TEXT_PRIMARY, SDK_COLOR_WHITE);
     sdk_graphics_text(10, 30, L"Left click and drag to draw", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_WHITE);
-    sdk_graphics_present();
 }
 
 void paint_handle_input(const input_event_t *event) {

@@ -294,9 +294,6 @@ void calculator_render(void) {
     
     sdk_component_render(g_calc_state->equals_button);
     sdk_component_render(g_calc_state->clear_button);
-    
-    // Present changes
-    sdk_graphics_present();
 }
 
 // ============================================================================
