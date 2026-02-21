@@ -118,9 +118,13 @@ BOOLEAN input_pop_event(input_event_t *out_event) {
         return FALSE;
     }
 
-    UINT8 *dst = (UINT8 *)out_event;
-    for (UINTN i = 0; i < sizeof(input_event_t); ++i) {
-        dst[i] = packet.payload[i];
+    // PERFORMANCE FIX (Issue 5.4): Replace byte-by-byte loop with word-aligned copy
+    // input_event_t is ~24 bytes; extract as 3-4 × 64-bit words
+    const UINT64 *payload_qwords = (const UINT64 *)packet.payload;
+    UINT64 *event_qwords = (UINT64 *)out_event;
+    UINTN qword_count = (sizeof(input_event_t) + sizeof(UINT64) - 1) / sizeof(UINT64);
+    for (UINTN i = 0; i < qword_count; ++i) {
+        event_qwords[i] = payload_qwords[i];
     }
 
     return TRUE;
