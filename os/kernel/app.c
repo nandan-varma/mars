@@ -694,24 +694,10 @@ static BOOLEAN sdk_app_task(void *context) {
     // SDK apps call their render functions to update content
     // Render functions update instance->content which is displayed by WM
     if ((instance->ticks % 10) == 0) {
-        if (equals_chars(instance->manifest.id, L"disk_app")) {
-            disk_app_render(instance);
-        } else if (equals_chars(instance->manifest.id, L"network_app")) {
-            network_app_render(instance);
-        } else if (equals_chars(instance->manifest.id, L"audio_app")) {
-            audio_app_render(instance);
-        } else if (equals_chars(instance->manifest.id, L"sysinfo_app")) {
-            sysinfo_app_render(instance);
-        } else {
-            // Fallback for other apps: just show app name
-            const CHAR16 *name = L"App";
-            if (equals_chars(instance->manifest.id, L"calculator")) name = L"Calculator";
-            else if (equals_chars(instance->manifest.id, L"paint")) name = L"Paint";
-            else if (equals_chars(instance->manifest.id, L"editor")) name = L"Text Editor";
-            else if (equals_chars(instance->manifest.id, L"file_manager")) name = L"File Manager";
-            else if (equals_chars(instance->manifest.id, L"settings")) name = L"Settings";
-            else if (equals_chars(instance->manifest.id, L"system_monitor")) name = L"System Monitor";
-
+        if (equals_chars(instance->manifest.id, L"calculator")) {
+            calculator_render();
+            // Calculator uses SDK graphics, copy name to content
+            const CHAR16 *name = L"Calculator";
             UINTN i = 0;
             while (name[i] != 0 && i < 30) {
                 instance->content[i] = name[i];
@@ -719,6 +705,64 @@ static BOOLEAN sdk_app_task(void *context) {
             }
             instance->content[i] = 0;
             instance->content_len = (UINT32)i;
+        } else if (equals_chars(instance->manifest.id, L"paint")) {
+            paint_render();
+            const CHAR16 *name = L"Paint";
+            UINTN i = 0;
+            while (name[i] != 0 && i < 30) {
+                instance->content[i] = name[i];
+                i++;
+            }
+            instance->content[i] = 0;
+            instance->content_len = (UINT32)i;
+        } else if (equals_chars(instance->manifest.id, L"editor")) {
+            editor_render();
+            const CHAR16 *name = L"Text Editor";
+            UINTN i = 0;
+            while (name[i] != 0 && i < 30) {
+                instance->content[i] = name[i];
+                i++;
+            }
+            instance->content[i] = 0;
+            instance->content_len = (UINT32)i;
+        } else if (equals_chars(instance->manifest.id, L"settings")) {
+            settings_render();
+            const CHAR16 *name = L"Settings";
+            UINTN i = 0;
+            while (name[i] != 0 && i < 30) {
+                instance->content[i] = name[i];
+                i++;
+            }
+            instance->content[i] = 0;
+            instance->content_len = (UINT32)i;
+        } else if (equals_chars(instance->manifest.id, L"file_manager")) {
+            file_manager_render();
+            const CHAR16 *name = L"File Manager";
+            UINTN i = 0;
+            while (name[i] != 0 && i < 30) {
+                instance->content[i] = name[i];
+                i++;
+            }
+            instance->content[i] = 0;
+            instance->content_len = (UINT32)i;
+        } else if (equals_chars(instance->manifest.id, L"system_monitor")) {
+            system_monitor_render();
+            const CHAR16 *name = L"System Monitor";
+            UINTN i = 0;
+            while (name[i] != 0 && i < 30) {
+                instance->content[i] = name[i];
+                i++;
+            }
+            instance->content[i] = 0;
+            instance->content_len = (UINT32)i;
+        } else if (equals_chars(instance->manifest.id, L"disk_app")) {
+            disk_app_render(instance);
+        } else if (equals_chars(instance->manifest.id, L"network_app")) {
+            network_app_render(instance);
+        } else if (equals_chars(instance->manifest.id, L"audio_app")) {
+            audio_app_render(instance);
+        } else if (equals_chars(instance->manifest.id, L"sysinfo_app")) {
+            sysinfo_app_render(instance);
         }
     }
 
@@ -741,10 +785,7 @@ static void set_sdk_app_content(app_instance_t *instance) {
 
 BOOLEAN app_launch(const CHAR16 *id) {
     // Check if this is an SDK app
-    if (equals_chars(id, L"calculator") || equals_chars(id, L"paint") ||
-        equals_chars(id, L"editor") || equals_chars(id, L"settings") ||
-        equals_chars(id, L"file_manager") || equals_chars(id, L"system_monitor") ||
-        equals_chars(id, L"disk_app") || equals_chars(id, L"network_app") ||
+    if (equals_chars(id, L"disk_app") || equals_chars(id, L"network_app") ||
         equals_chars(id, L"audio_app") || equals_chars(id, L"sysinfo_app")) {
         return app_instance_launch(id, sdk_app_task, set_sdk_app_content);
     }
@@ -754,16 +795,10 @@ BOOLEAN app_launch(const CHAR16 *id) {
 
 void app_launch_core_suite(void) {
     const app_manifest_t defaults[] = {
-        { L"calculator", L"Calculator", CAP_GRAPHICS | CAP_INPUT, 50, 50, 320, 280 },
-        { L"paint", L"Paint", CAP_GRAPHICS | CAP_INPUT, 100, 100, 400, 300 },
-        { L"editor", L"Text Editor", CAP_GRAPHICS | CAP_INPUT, 150, 150, 400, 300 },
-        { L"file_manager", L"File Manager", CAP_GRAPHICS | CAP_STORAGE, 200, 200, 400, 300 },
-        { L"system_monitor", L"System Monitor", CAP_GRAPHICS, 250, 250, 350, 250 },
-        { L"settings", L"Settings", CAP_GRAPHICS, 300, 180, 320, 240 },
-        { L"disk_app", L"Disk Browser", CAP_GRAPHICS | CAP_STORAGE, 400, 100, 380, 400 },
-        { L"network_app", L"Network", CAP_GRAPHICS | CAP_INPUT | CAP_SYSTEM, 450, 150, 400, 400 },
-        { L"audio_app", L"Audio Test", CAP_GRAPHICS | CAP_INPUT, 500, 200, 380, 350 },
-        { L"sysinfo_app", L"System Info", CAP_GRAPHICS, 550, 250, 380, 280 }
+        { L"disk_app", L"Disk Browser", CAP_GRAPHICS | CAP_STORAGE, 100, 50, 400, 350 },
+        { L"network_app", L"Network", CAP_GRAPHICS | CAP_INPUT | CAP_SYSTEM, 150, 80, 400, 380 },
+        { L"audio_app", L"Audio Test", CAP_GRAPHICS | CAP_INPUT, 200, 110, 380, 320 },
+        { L"sysinfo_app", L"System Info", CAP_GRAPHICS, 250, 140, 380, 280 }
     };
 
     for (UINTN i = 0; i < (sizeof(defaults) / sizeof(defaults[0])); ++i) {
