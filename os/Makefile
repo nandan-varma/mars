@@ -55,12 +55,12 @@ ifeq ($(USE_MINGW),1)
 CC := $(DETECTED_MINGW_CC)
 endif
 
-CFLAGS := -O2 -Iinclude -ffreestanding -fpic -fshort-wchar -fno-stack-protector -mno-red-zone -Wall -Wextra -Werror
+CFLAGS := -O2 -Iinclude -Ikernel -ffreestanding -fpic -fshort-wchar -fno-stack-protector -mno-red-zone -Wall -Wextra -Werror
 LDFLAGS := -nostdlib -znocombreloc -T linker.ld -shared -Bsymbolic -e efi_main
 LDLIBS :=
 
 ifeq ($(USE_MINGW),1)
-CFLAGS := -O2 -Iinclude -ffreestanding -fshort-wchar -fno-stack-protector -mno-red-zone -Wall -Wextra -Werror
+CFLAGS := -O2 -Iinclude -Ikernel -ffreestanding -fshort-wchar -fno-stack-protector -mno-red-zone -Wall -Wextra -Werror
 LDFLAGS := -nostdlib -Wl,--subsystem,10 -Wl,-e,efi_main
 endif
 
@@ -118,6 +118,10 @@ SRCS := \
 	apps/settings.c \
 	apps/file_manager.c \
 	apps/system_monitor.c \
+	apps/disk_app.c \
+	apps/network_app.c \
+	apps/audio_app.c \
+	apps/sysinfo_app.c \
 	kernel/vfs.c \
 	kernel/fat.c \
 	drivers/input.c \

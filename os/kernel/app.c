@@ -77,6 +77,22 @@ extern BOOLEAN system_monitor_init(UINT32 window_id);
 extern void system_monitor_render(void);
 extern void system_monitor_handle_input(const input_event_t *event);
 
+extern BOOLEAN disk_app_init(UINT32 window_id);
+extern void disk_app_render(app_instance_t *instance);
+extern void disk_app_handle_input(const input_event_t *event);
+
+extern BOOLEAN network_app_init(UINT32 window_id);
+extern void network_app_render(app_instance_t *instance);
+extern void network_app_handle_input(const input_event_t *event);
+
+extern BOOLEAN audio_app_init(UINT32 window_id);
+extern void audio_app_render(app_instance_t *instance);
+extern void audio_app_handle_input(const input_event_t *event);
+
+extern BOOLEAN sysinfo_app_init(UINT32 window_id);
+extern void sysinfo_app_render(app_instance_t *instance);
+extern void sysinfo_app_handle_input(const input_event_t *event);
+
 static UINTN text_length(const CHAR16 *text, UINTN max_chars) {
     if (text == NULL) {
         return 0;
@@ -621,6 +637,14 @@ static BOOLEAN sdk_app_task(void *context) {
             init_fn = file_manager_init;
         } else if (equals_chars(instance->manifest.id, L"system_monitor")) {
             init_fn = system_monitor_init;
+        } else if (equals_chars(instance->manifest.id, L"disk_app")) {
+            init_fn = disk_app_init;
+        } else if (equals_chars(instance->manifest.id, L"network_app")) {
+            init_fn = network_app_init;
+        } else if (equals_chars(instance->manifest.id, L"audio_app")) {
+            init_fn = audio_app_init;
+        } else if (equals_chars(instance->manifest.id, L"sysinfo_app")) {
+            init_fn = sysinfo_app_init;
         }
 
         if (init_fn != NULL && init_fn(instance->window_id)) {
@@ -654,43 +678,51 @@ static BOOLEAN sdk_app_task(void *context) {
                 file_manager_handle_input(&input);
             } else if (equals_chars(instance->manifest.id, L"system_monitor")) {
                 system_monitor_handle_input(&input);
+            } else if (equals_chars(instance->manifest.id, L"disk_app")) {
+                disk_app_handle_input(&input);
+            } else if (equals_chars(instance->manifest.id, L"network_app")) {
+                network_app_handle_input(&input);
+            } else if (equals_chars(instance->manifest.id, L"audio_app")) {
+                audio_app_handle_input(&input);
+            } else if (equals_chars(instance->manifest.id, L"sysinfo_app")) {
+                sysinfo_app_handle_input(&input);
             }
         }
         ++processed;
     }
 
-    // SDK apps process input but don't render to framebuffer directly
-    // WM controls all rendering - this prevents conflicts/flickering
-    // Apps can update internal state but display is managed by WM
-    
-    // Update content buffer so WM shows something in the window
-    static const CHAR16 app_names[6][16] = {
-        L"Calculator",
-        L"Paint",
-        L"Text Editor",
-        L"File Manager",
-        L"Settings",
-        L"System Monitor"
-    };
-    
-    // Find app name
-    const CHAR16 *name = L"App";
-    if (equals_chars(instance->manifest.id, L"calculator")) name = app_names[0];
-    else if (equals_chars(instance->manifest.id, L"paint")) name = app_names[1];
-    else if (equals_chars(instance->manifest.id, L"editor")) name = app_names[2];
-    else if (equals_chars(instance->manifest.id, L"file_manager")) name = app_names[3];
-    else if (equals_chars(instance->manifest.id, L"settings")) name = app_names[4];
-    else if (equals_chars(instance->manifest.id, L"system_monitor")) name = app_names[5];
-    
-    // Copy to content
-    UINTN i = 0;
-    while (name[i] != 0 && i < 30) {
-        instance->content[i] = name[i];
-        i++;
+    // SDK apps call their render functions to update content
+    // Render functions update instance->content which is displayed by WM
+    if ((instance->ticks % 10) == 0) {
+        if (equals_chars(instance->manifest.id, L"disk_app")) {
+            disk_app_render(instance);
+        } else if (equals_chars(instance->manifest.id, L"network_app")) {
+            network_app_render(instance);
+        } else if (equals_chars(instance->manifest.id, L"audio_app")) {
+            audio_app_render(instance);
+        } else if (equals_chars(instance->manifest.id, L"sysinfo_app")) {
+            sysinfo_app_render(instance);
+        } else {
+            // Fallback for other apps: just show app name
+            const CHAR16 *name = L"App";
+            if (equals_chars(instance->manifest.id, L"calculator")) name = L"Calculator";
+            else if (equals_chars(instance->manifest.id, L"paint")) name = L"Paint";
+            else if (equals_chars(instance->manifest.id, L"editor")) name = L"Text Editor";
+            else if (equals_chars(instance->manifest.id, L"file_manager")) name = L"File Manager";
+            else if (equals_chars(instance->manifest.id, L"settings")) name = L"Settings";
+            else if (equals_chars(instance->manifest.id, L"system_monitor")) name = L"System Monitor";
+
+            UINTN i = 0;
+            while (name[i] != 0 && i < 30) {
+                instance->content[i] = name[i];
+                i++;
+            }
+            instance->content[i] = 0;
+            instance->content_len = (UINT32)i;
+        }
     }
-    instance->content[i] = 0;
-    instance->content_len = (UINT32)i;
-    
+
+    // Copy to WM
     (void)wm_set_window_content(instance->window_id, instance->content);
 
     return TRUE;
@@ -711,7 +743,9 @@ BOOLEAN app_launch(const CHAR16 *id) {
     // Check if this is an SDK app
     if (equals_chars(id, L"calculator") || equals_chars(id, L"paint") ||
         equals_chars(id, L"editor") || equals_chars(id, L"settings") ||
-        equals_chars(id, L"file_manager") || equals_chars(id, L"system_monitor")) {
+        equals_chars(id, L"file_manager") || equals_chars(id, L"system_monitor") ||
+        equals_chars(id, L"disk_app") || equals_chars(id, L"network_app") ||
+        equals_chars(id, L"audio_app") || equals_chars(id, L"sysinfo_app")) {
         return app_instance_launch(id, sdk_app_task, set_sdk_app_content);
     }
     // Legacy console apps
@@ -725,7 +759,11 @@ void app_launch_core_suite(void) {
         { L"editor", L"Text Editor", CAP_GRAPHICS | CAP_INPUT, 150, 150, 400, 300 },
         { L"file_manager", L"File Manager", CAP_GRAPHICS | CAP_STORAGE, 200, 200, 400, 300 },
         { L"system_monitor", L"System Monitor", CAP_GRAPHICS, 250, 250, 350, 250 },
-        { L"settings", L"Settings", CAP_GRAPHICS, 300, 180, 320, 240 }
+        { L"settings", L"Settings", CAP_GRAPHICS, 300, 180, 320, 240 },
+        { L"disk_app", L"Disk Browser", CAP_GRAPHICS | CAP_STORAGE, 400, 100, 380, 400 },
+        { L"network_app", L"Network", CAP_GRAPHICS | CAP_INPUT | CAP_SYSTEM, 450, 150, 400, 400 },
+        { L"audio_app", L"Audio Test", CAP_GRAPHICS | CAP_INPUT, 500, 200, 380, 350 },
+        { L"sysinfo_app", L"System Info", CAP_GRAPHICS, 550, 250, 380, 280 }
     };
 
     for (UINTN i = 0; i < (sizeof(defaults) / sizeof(defaults[0])); ++i) {
