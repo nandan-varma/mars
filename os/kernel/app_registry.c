@@ -1,4 +1,4 @@
-#include "app_internal.h"
+#include "internal/app_internal.h"
 
 static app_manifest_t g_manifests[MAX_APPS];
 static UINTN g_manifest_count;

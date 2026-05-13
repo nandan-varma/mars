@@ -1,7 +1,7 @@
 #include "vm.h"
 
 #include "memory.h"
-#include "vm_internal.h"
+#include "internal/vm_internal.h"
 
 static vm_state_t g_spaces[VM_MAX_SPACES];
 static UINTN g_space_count;

@@ -112,12 +112,7 @@ SRCS := \
 	kernel/app_console_cmd.c \
 	kernel/app_registry.c \
 	kernel/app_instance.c \
-	apps/calculator.c \
-	apps/paint.c \
-	apps/editor.c \
-	apps/settings.c \
-	apps/file_manager.c \
-	apps/system_monitor.c \
+	kernel/app_utils.c \
 	apps/disk_app.c \
 	apps/network_app.c \
 	apps/audio_app.c \

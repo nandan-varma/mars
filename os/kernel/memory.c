@@ -1,7 +1,7 @@
 #include "memory.h"
 
 #include "diag.h"
-#include "memory_internal.h"
+#include "internal/memory_internal.h"
 
 static EFI_BOOT_SERVICES *g_boot_services;
 static UINTN g_outstanding_pages;

@@ -1,4 +1,4 @@
-#include "mouse_internal.h"
+#include "internal/mouse_internal.h"
 
 // SECURITY FIX #3: PS/2 Buffer Overflow (CWE-680: Integer Overflow to Buffer Overflow)
 // The original code incremented g_ps2_packet_index BEFORE checking bounds.

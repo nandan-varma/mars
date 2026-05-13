@@ -1,4 +1,4 @@
-#include "memory_internal.h"
+#include "internal/memory_internal.h"
 
 #define MAX_PAGE_REGIONS 128
 

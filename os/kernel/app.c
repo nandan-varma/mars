@@ -1,7 +1,7 @@
 #include "app.h"
-
+#include "app_utils.h"
 #include "app_console_cmd.h"
-#include "app_internal.h"
+#include "internal/app_internal.h"
 
 #include "diag.h"
 #include "event_bus.h"
@@ -12,70 +12,14 @@
 #include "vfs.h"
 #include "wm.h"
 
-#include "sdk/sdk_core.h"
-#include "sdk/sdk_graphics.h"
-#include "sdk/sdk_input.h"
-#include "sdk/sdk_ui.h"
-#include "sdk/sdk_app.h"
-
 #define APP_MAX_TASK_LINES 6
 #define APP_MAX_LOG_LINES 8
 
 static UINT32 g_app_manager_pid;
 
-static void copy_chars(CHAR16 *dst, const CHAR16 *src, UINTN max_chars) {
-    if (max_chars == 0) {
-        return;
-    }
-
-    UINTN i = 0;
-    while (i + 1 < max_chars && src[i] != 0) {
-        dst[i] = src[i];
-        ++i;
-    }
-    dst[i] = 0;
-}
-
-static BOOLEAN equals_chars(const CHAR16 *a, const CHAR16 *b) {
-    UINTN i = 0;
-    for (;;) {
-        if (a[i] != b[i]) {
-            return FALSE;
-        }
-        if (a[i] == 0) {
-            return TRUE;
-        }
-        ++i;
-    }
-}
-
 // ============================================================================
 // SDK App Forward Declarations
 // ============================================================================
-
-extern BOOLEAN calculator_init(UINT32 window_id);
-extern void calculator_render(void);
-extern void calculator_handle_input(const input_event_t *event);
-
-extern BOOLEAN paint_init(UINT32 window_id);
-extern void paint_render(void);
-extern void paint_handle_input(const input_event_t *event);
-
-extern BOOLEAN editor_init(UINT32 window_id);
-extern void editor_render(void);
-extern void editor_handle_input(const input_event_t *event);
-
-extern BOOLEAN settings_init(UINT32 window_id);
-extern void settings_render(void);
-extern void settings_handle_input(const input_event_t *event);
-
-extern BOOLEAN file_manager_init(UINT32 window_id);
-extern void file_manager_render(void);
-extern void file_manager_handle_input(const input_event_t *event);
-
-extern BOOLEAN system_monitor_init(UINT32 window_id);
-extern void system_monitor_render(void);
-extern void system_monitor_handle_input(const input_event_t *event);
 
 extern BOOLEAN disk_app_init(UINT32 window_id);
 extern void disk_app_render(app_instance_t *instance);
@@ -93,185 +37,6 @@ extern BOOLEAN sysinfo_app_init(UINT32 window_id);
 extern void sysinfo_app_render(app_instance_t *instance);
 extern void sysinfo_app_handle_input(const input_event_t *event);
 
-static UINTN text_length(const CHAR16 *text, UINTN max_chars) {
-    if (text == NULL) {
-        return 0;
-    }
-
-    UINTN len = 0;
-    while (len < max_chars && text[len] != 0) {
-        ++len;
-    }
-    return len;
-}
-
-static void buffer_trim_front(CHAR16 *buffer, UINTN max_chars, UINTN *len_io, UINTN needed_space) {
-    if (buffer == NULL || len_io == NULL || max_chars == 0) {
-        return;
-    }
-
-    UINTN len = *len_io;
-    while (len + needed_space + 1 >= max_chars && len > 0) {
-        UINTN trim = 0;
-        while (trim < len && buffer[trim] != L'\n') {
-            ++trim;
-        }
-        if (trim < len && buffer[trim] == L'\n') {
-            ++trim;
-        }
-        if (trim == 0 || trim >= len) {
-            len = 0;
-            buffer[0] = 0;
-            break;
-        }
-
-        UINTN write = 0;
-        for (UINTN read = trim; read < len; ++read) {
-            buffer[write++] = buffer[read];
-        }
-        len = write;
-        buffer[len] = 0;
-    }
-
-    *len_io = len;
-}
-
-static void buffer_append_text(CHAR16 *buffer, UINTN max_chars, UINTN *len_io, const CHAR16 *text) {
-    if (buffer == NULL || len_io == NULL || text == NULL || max_chars == 0) {
-        return;
-    }
-
-    UINTN len = *len_io;
-    UINTN add = text_length(text, max_chars);
-    buffer_trim_front(buffer, max_chars, &len, add);
-
-    UINTN i = 0;
-    while (len + 1 < max_chars && text[i] != 0) {
-        buffer[len++] = text[i++];
-    }
-    buffer[len] = 0;
-    *len_io = len;
-}
-
-static void buffer_append_char(CHAR16 *buffer, UINTN max_chars, UINTN *len_io, CHAR16 ch) {
-    if (buffer == NULL || len_io == NULL || max_chars == 0) {
-        return;
-    }
-
-    UINTN len = *len_io;
-    buffer_trim_front(buffer, max_chars, &len, 1);
-    if (len + 1 < max_chars) {
-        buffer[len++] = ch;
-        buffer[len] = 0;
-    }
-    *len_io = len;
-}
-
-static void copy_text(CHAR16 *dst, const CHAR16 *src, UINTN max_chars) {
-    if (dst == NULL || src == NULL || max_chars == 0) {
-        return;
-    }
-
-    UINTN i = 0;
-    while (i + 1 < max_chars && src[i] != 0) {
-        dst[i] = src[i];
-        ++i;
-    }
-    dst[i] = 0;
-}
-
-static UINTN bounded_text_len(const CHAR16 *text, UINTN max_chars) {
-    UINTN len = 0;
-    if (text == NULL) {
-        return 0;
-    }
-
-    while (len < max_chars && text[len] != 0) {
-        ++len;
-    }
-    return len;
-}
-
-static void to_decimal(UINT64 value, CHAR16 *out, UINTN max_chars) {
-    if (out == NULL || max_chars == 0) {
-        return;
-    }
-
-    if (value == 0) {
-        out[0] = L'0';
-        if (max_chars > 1) {
-            out[1] = 0;
-        }
-        return;
-    }
-
-    CHAR16 tmp[24];
-    UINTN len = 0;
-    while (value > 0 && len < 23) {
-        tmp[len++] = (CHAR16)(L'0' + (value % 10));
-        value /= 10;
-    }
-
-    UINTN out_index = 0;
-    while (len > 0 && out_index + 1 < max_chars) {
-        out[out_index++] = tmp[--len];
-    }
-    out[out_index] = 0;
-}
-
-static void copy_append_text(CHAR16 *dst, UINTN max_chars, const CHAR16 *src) {
-    if (dst == NULL || src == NULL || max_chars == 0) {
-        return;
-    }
-
-    UINTN len = 0;
-    while (len + 1 < max_chars && dst[len] != 0) {
-        ++len;
-    }
-
-    UINTN i = 0;
-    while (len + 1 < max_chars && src[i] != 0) {
-        dst[len++] = src[i++];
-    }
-    dst[len] = 0;
-}
-
-static void append_u64_text(CHAR16 *dst, UINTN max_chars, UINT64 value) {
-    CHAR16 tmp[24];
-    to_decimal(value, tmp, 24);
-    copy_append_text(dst, max_chars, tmp);
-}
-
-static void to_hex32(UINT32 value, CHAR16 *out, UINTN max_chars) {
-    static const CHAR16 digits[] = L"0123456789ABCDEF";
-    if (out == NULL || max_chars < 3) {
-        return;
-    }
-
-    out[0] = L'0';
-    out[1] = L'x';
-    UINTN written = 2;
-    BOOLEAN started = FALSE;
-
-    for (INT32 shift = 28; shift >= 0; shift -= 4) {
-        UINT32 nibble = (value >> (UINT32)shift) & 0xFU;
-        if (!started && nibble == 0 && shift > 0) {
-            continue;
-        }
-        started = TRUE;
-        if (written + 1 >= max_chars) {
-            break;
-        }
-        out[written++] = digits[nibble];
-    }
-
-    if (!started && written + 1 < max_chars) {
-        out[written++] = L'0';
-    }
-
-    out[written] = 0;
-}
-
 static void reset_input(app_instance_t *instance) {
     if (instance == NULL) {
         return;
@@ -282,20 +47,20 @@ static void reset_input(app_instance_t *instance) {
 }
 
 static BOOLEAN is_console_id(const CHAR16 *id) {
-    return equals_chars(id, L"shell") || equals_chars(id, L"term") || equals_chars(id, L"files") || equals_chars(id, L"settings");
+    return app_utils_equals(id, L"shell") || app_utils_equals(id, L"term") || app_utils_equals(id, L"files") || app_utils_equals(id, L"settings");
 }
 
 static const CHAR16 *prompt_for(const CHAR16 *id) {
-    if (equals_chars(id, L"shell")) {
+    if (app_utils_equals(id, L"shell")) {
         return L"shell> ";
     }
-    if (equals_chars(id, L"term")) {
+    if (app_utils_equals(id, L"term")) {
         return L"term> ";
     }
-    if (equals_chars(id, L"files")) {
+    if (app_utils_equals(id, L"files")) {
         return L"files> ";
     }
-    if (equals_chars(id, L"settings")) {
+    if (app_utils_equals(id, L"settings")) {
         return L"settings> ";
     }
     return L"> ";
@@ -309,12 +74,12 @@ static void compose_console_view(app_instance_t *instance) {
     instance->content[0] = 0;
     instance->content_len = 0;
 
-    buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, instance->history);
+    app_utils_buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, instance->history);
     if (instance->content_len > 0) {
-        buffer_append_char(instance->content, APP_CONTENT_CHARS, &instance->content_len, L'\n');
+        app_utils_buffer_append_char(instance->content, APP_CONTENT_CHARS, &instance->content_len, L'\n');
     }
-    buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, prompt_for(instance->manifest.id));
-    buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, instance->input_line);
+    app_utils_buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, prompt_for(instance->manifest.id));
+    app_utils_buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, instance->input_line);
 }
 
 static void history_append_line(app_instance_t *instance, const CHAR16 *line) {
@@ -323,9 +88,9 @@ static void history_append_line(app_instance_t *instance, const CHAR16 *line) {
     }
 
     if (instance->history_len > 0) {
-        buffer_append_char(instance->history, APP_CONTENT_CHARS, &instance->history_len, L'\n');
+        app_utils_buffer_append_char(instance->history, APP_CONTENT_CHARS, &instance->history_len, L'\n');
     }
-    buffer_append_text(instance->history, APP_CONTENT_CHARS, &instance->history_len, line);
+    app_utils_buffer_append_text(instance->history, APP_CONTENT_CHARS, &instance->history_len, line);
 }
 
 static void history_append_prompt_line(app_instance_t *instance) {
@@ -334,20 +99,20 @@ static void history_append_prompt_line(app_instance_t *instance) {
     }
 
     CHAR16 line[APP_INPUT_CHARS + 16];
-    copy_text(line, prompt_for(instance->manifest.id), APP_INPUT_CHARS + 16);
-    copy_append_text(line, APP_INPUT_CHARS + 16, instance->input_line);
+    app_utils_copy_text(line, prompt_for(instance->manifest.id), APP_INPUT_CHARS + 16);
+    app_utils_copy_append(line, APP_INPUT_CHARS + 16, instance->input_line);
     history_append_line(instance, line);
 }
 
 static void append_task_state(CHAR16 *line, UINTN max_chars, task_state_t state) {
     if (state == TASK_READY) {
-        copy_append_text(line, max_chars, L"ready");
+        app_utils_copy_append(line, max_chars, L"ready");
     } else if (state == TASK_RUNNING) {
-        copy_append_text(line, max_chars, L"run");
+        app_utils_copy_append(line, max_chars, L"run");
     } else if (state == TASK_BLOCKED) {
-        copy_append_text(line, max_chars, L"blk");
+        app_utils_copy_append(line, max_chars, L"blk");
     } else {
-        copy_append_text(line, max_chars, L"stop");
+        app_utils_copy_append(line, max_chars, L"stop");
     }
 }
 
@@ -360,13 +125,13 @@ static void render_tasks_content(app_instance_t *instance) {
     instance->content_len = 0;
 
     CHAR16 line[96];
-    copy_text(line, L"Running processes: ", 96);
-    append_u64_text(line, 96, process_running_count());
-    buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, line);
+    app_utils_copy_text(line, L"Running processes: ", 96);
+    app_utils_append_u64(line, 96, process_running_count());
+    app_utils_buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, line);
 
-    buffer_append_char(instance->content, APP_CONTENT_CHARS, &instance->content_len, L'\n');
-    copy_text(line, L"Tasks:", 96);
-    buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, line);
+    app_utils_buffer_append_char(instance->content, APP_CONTENT_CHARS, &instance->content_len, L'\n');
+    app_utils_copy_text(line, L"Tasks:", 96);
+    app_utils_buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, line);
 
     UINTN shown = 0;
     UINTN total = scheduler_task_count();
@@ -376,17 +141,17 @@ static void render_tasks_content(app_instance_t *instance) {
             continue;
         }
 
-        buffer_append_char(instance->content, APP_CONTENT_CHARS, &instance->content_len, L'\n');
+        app_utils_buffer_append_char(instance->content, APP_CONTENT_CHARS, &instance->content_len, L'\n');
         line[0] = 0;
-        copy_append_text(line, 96, L"#");
-        append_u64_text(line, 96, task.id);
-        copy_append_text(line, 96, L" ");
-        copy_append_text(line, 96, task.name);
-        copy_append_text(line, 96, L" pid=");
-        append_u64_text(line, 96, task.owner_pid);
-        copy_append_text(line, 96, L" ");
+        app_utils_copy_append(line, 96, L"#");
+        app_utils_append_u64(line, 96, task.id);
+        app_utils_copy_append(line, 96, L" ");
+        app_utils_copy_append(line, 96, task.name);
+        app_utils_copy_append(line, 96, L" pid=");
+        app_utils_append_u64(line, 96, task.owner_pid);
+        app_utils_copy_append(line, 96, L" ");
         append_task_state(line, 96, task.state);
-        buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, line);
+        app_utils_buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, line);
         ++shown;
     }
 }
@@ -398,14 +163,14 @@ static void render_logs_content(app_instance_t *instance) {
 
     instance->content[0] = 0;
     instance->content_len = 0;
-    buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, L"Recent kernel logs:");
+    app_utils_buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, L"Recent kernel logs:");
 
     for (UINTN i = 0; i < APP_MAX_LOG_LINES; ++i) {
         diag_record_t rec;
         if (!diag_recent(i, &rec)) {
             if (i == 0) {
-                buffer_append_char(instance->content, APP_CONTENT_CHARS, &instance->content_len, L'\n');
-                buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, L"(no records yet)");
+                app_utils_buffer_append_char(instance->content, APP_CONTENT_CHARS, &instance->content_len, L'\n');
+                app_utils_buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, L"(no records yet)");
             }
             break;
         }
@@ -413,17 +178,17 @@ static void render_logs_content(app_instance_t *instance) {
         CHAR16 line[96];
         CHAR16 d[20];
         CHAR16 c[20];
-        to_hex32(rec.domain, d, 20);
-        to_hex32(rec.code, c, 20);
+        app_utils_to_hex32(rec.domain, d, 20);
+        app_utils_to_hex32(rec.code, c, 20);
         line[0] = 0;
-        copy_append_text(line, 96, L"t=");
-        append_u64_text(line, 96, rec.tick);
-        copy_append_text(line, 96, L" ");
-        copy_append_text(line, 96, d);
-        copy_append_text(line, 96, L"/");
-        copy_append_text(line, 96, c);
-        buffer_append_char(instance->content, APP_CONTENT_CHARS, &instance->content_len, L'\n');
-        buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, line);
+        app_utils_copy_append(line, 96, L"t=");
+        app_utils_append_u64(line, 96, rec.tick);
+        app_utils_copy_append(line, 96, L" ");
+        app_utils_copy_append(line, 96, d);
+        app_utils_copy_append(line, 96, L"/");
+        app_utils_copy_append(line, 96, c);
+        app_utils_buffer_append_char(instance->content, APP_CONTENT_CHARS, &instance->content_len, L'\n');
+        app_utils_buffer_append_text(instance->content, APP_CONTENT_CHARS, &instance->content_len, line);
     }
 }
 
@@ -438,25 +203,25 @@ static void set_default_content(app_instance_t *instance) {
     instance->history_len = 0;
     reset_input(instance);
 
-    if (equals_chars(instance->manifest.id, L"shell")) {
+    if (app_utils_equals(instance->manifest.id, L"shell")) {
         history_append_line(instance, L"Mars shell. Type help.");
         compose_console_view(instance);
-    } else if (equals_chars(instance->manifest.id, L"term")) {
+    } else if (app_utils_equals(instance->manifest.id, L"term")) {
         history_append_line(instance, L"Terminal online. Type help.");
         compose_console_view(instance);
-    } else if (equals_chars(instance->manifest.id, L"files")) {
+    } else if (app_utils_equals(instance->manifest.id, L"files")) {
         history_append_line(instance, L"File browser ready. Type ls or cat <path>.");
         compose_console_view(instance);
-    } else if (equals_chars(instance->manifest.id, L"settings")) {
+    } else if (app_utils_equals(instance->manifest.id, L"settings")) {
         history_append_line(instance, L"Settings console. Type status or debug toggle.");
         compose_console_view(instance);
-    } else if (equals_chars(instance->manifest.id, L"tasks")) {
+    } else if (app_utils_equals(instance->manifest.id, L"tasks")) {
         render_tasks_content(instance);
-    } else if (equals_chars(instance->manifest.id, L"logs")) {
+    } else if (app_utils_equals(instance->manifest.id, L"logs")) {
         render_logs_content(instance);
     } else {
-        copy_text(instance->content, L"App online.", APP_CONTENT_CHARS);
-        instance->content_len = text_length(instance->content, APP_CONTENT_CHARS);
+        app_utils_copy_text(instance->content, L"App online.", APP_CONTENT_CHARS);
+        instance->content_len = app_utils_text_length(instance->content, APP_CONTENT_CHARS);
     }
 }
 
@@ -546,9 +311,9 @@ static BOOLEAN app_task_step(void *context) {
         (void)event_bus_publish(&packet);
     }
 
-    if (equals_chars(instance->manifest.id, L"tasks") && (instance->ticks % 10) == 0) {
+    if (app_utils_equals(instance->manifest.id, L"tasks") && (instance->ticks % 10) == 0) {
         render_tasks_content(instance);
-    } else if (equals_chars(instance->manifest.id, L"logs") && (instance->ticks % 10) == 0) {
+    } else if (app_utils_equals(instance->manifest.id, L"logs") && (instance->ticks % 10) == 0) {
         render_logs_content(instance);
     }
 
@@ -587,7 +352,7 @@ static BOOLEAN app_manager_task(void *context) {
             }
             id[(sizeof(id) / sizeof(id[0])) - 1] = 0;
 
-            if (bounded_text_len(id, 24) > 0) {
+            if (app_utils_bounded_len(id, 24) > 0) {
                 (void)app_launch(id);
             }
         }
@@ -625,25 +390,13 @@ static BOOLEAN sdk_app_task(void *context) {
     if (!*initialized) {
         BOOLEAN (*init_fn)(UINT32) = NULL;
 
-        if (equals_chars(instance->manifest.id, L"calculator")) {
-            init_fn = calculator_init;
-        } else if (equals_chars(instance->manifest.id, L"paint")) {
-            init_fn = paint_init;
-        } else if (equals_chars(instance->manifest.id, L"editor")) {
-            init_fn = editor_init;
-        } else if (equals_chars(instance->manifest.id, L"settings")) {
-            init_fn = settings_init;
-        } else if (equals_chars(instance->manifest.id, L"file_manager")) {
-            init_fn = file_manager_init;
-        } else if (equals_chars(instance->manifest.id, L"system_monitor")) {
-            init_fn = system_monitor_init;
-        } else if (equals_chars(instance->manifest.id, L"disk_app")) {
+        if (app_utils_equals(instance->manifest.id, L"disk_app")) {
             init_fn = disk_app_init;
-        } else if (equals_chars(instance->manifest.id, L"network_app")) {
+        } else if (app_utils_equals(instance->manifest.id, L"network_app")) {
             init_fn = network_app_init;
-        } else if (equals_chars(instance->manifest.id, L"audio_app")) {
+        } else if (app_utils_equals(instance->manifest.id, L"audio_app")) {
             init_fn = audio_app_init;
-        } else if (equals_chars(instance->manifest.id, L"sysinfo_app")) {
+        } else if (app_utils_equals(instance->manifest.id, L"sysinfo_app")) {
             init_fn = sysinfo_app_init;
         }
 
@@ -666,25 +419,13 @@ static BOOLEAN sdk_app_task(void *context) {
             }
 
             // Dispatch input to appropriate app
-            if (equals_chars(instance->manifest.id, L"calculator")) {
-                calculator_handle_input(&input);
-            } else if (equals_chars(instance->manifest.id, L"paint")) {
-                paint_handle_input(&input);
-            } else if (equals_chars(instance->manifest.id, L"editor")) {
-                editor_handle_input(&input);
-            } else if (equals_chars(instance->manifest.id, L"settings")) {
-                settings_handle_input(&input);
-            } else if (equals_chars(instance->manifest.id, L"file_manager")) {
-                file_manager_handle_input(&input);
-            } else if (equals_chars(instance->manifest.id, L"system_monitor")) {
-                system_monitor_handle_input(&input);
-            } else if (equals_chars(instance->manifest.id, L"disk_app")) {
+            if (app_utils_equals(instance->manifest.id, L"disk_app")) {
                 disk_app_handle_input(&input);
-            } else if (equals_chars(instance->manifest.id, L"network_app")) {
+            } else if (app_utils_equals(instance->manifest.id, L"network_app")) {
                 network_app_handle_input(&input);
-            } else if (equals_chars(instance->manifest.id, L"audio_app")) {
+            } else if (app_utils_equals(instance->manifest.id, L"audio_app")) {
                 audio_app_handle_input(&input);
-            } else if (equals_chars(instance->manifest.id, L"sysinfo_app")) {
+            } else if (app_utils_equals(instance->manifest.id, L"sysinfo_app")) {
                 sysinfo_app_handle_input(&input);
             }
         }
@@ -694,74 +435,13 @@ static BOOLEAN sdk_app_task(void *context) {
     // SDK apps call their render functions to update content
     // Render functions update instance->content which is displayed by WM
     if ((instance->ticks % 10) == 0) {
-        if (equals_chars(instance->manifest.id, L"calculator")) {
-            calculator_render();
-            // Calculator uses SDK graphics, copy name to content
-            const CHAR16 *name = L"Calculator";
-            UINTN i = 0;
-            while (name[i] != 0 && i < 30) {
-                instance->content[i] = name[i];
-                i++;
-            }
-            instance->content[i] = 0;
-            instance->content_len = (UINT32)i;
-        } else if (equals_chars(instance->manifest.id, L"paint")) {
-            paint_render();
-            const CHAR16 *name = L"Paint";
-            UINTN i = 0;
-            while (name[i] != 0 && i < 30) {
-                instance->content[i] = name[i];
-                i++;
-            }
-            instance->content[i] = 0;
-            instance->content_len = (UINT32)i;
-        } else if (equals_chars(instance->manifest.id, L"editor")) {
-            editor_render();
-            const CHAR16 *name = L"Text Editor";
-            UINTN i = 0;
-            while (name[i] != 0 && i < 30) {
-                instance->content[i] = name[i];
-                i++;
-            }
-            instance->content[i] = 0;
-            instance->content_len = (UINT32)i;
-        } else if (equals_chars(instance->manifest.id, L"settings")) {
-            settings_render();
-            const CHAR16 *name = L"Settings";
-            UINTN i = 0;
-            while (name[i] != 0 && i < 30) {
-                instance->content[i] = name[i];
-                i++;
-            }
-            instance->content[i] = 0;
-            instance->content_len = (UINT32)i;
-        } else if (equals_chars(instance->manifest.id, L"file_manager")) {
-            file_manager_render();
-            const CHAR16 *name = L"File Manager";
-            UINTN i = 0;
-            while (name[i] != 0 && i < 30) {
-                instance->content[i] = name[i];
-                i++;
-            }
-            instance->content[i] = 0;
-            instance->content_len = (UINT32)i;
-        } else if (equals_chars(instance->manifest.id, L"system_monitor")) {
-            system_monitor_render();
-            const CHAR16 *name = L"System Monitor";
-            UINTN i = 0;
-            while (name[i] != 0 && i < 30) {
-                instance->content[i] = name[i];
-                i++;
-            }
-            instance->content[i] = 0;
-            instance->content_len = (UINT32)i;
-        } else if (equals_chars(instance->manifest.id, L"disk_app")) {
+        if (app_utils_equals(instance->manifest.id, L"disk_app")) {
             disk_app_render(instance);
-        } else if (equals_chars(instance->manifest.id, L"network_app")) {
+        } else if (app_utils_equals(instance->manifest.id, L"network_app")) {
             network_app_render(instance);
-        } else if (equals_chars(instance->manifest.id, L"audio_app")) {
+        } else if (app_utils_equals(instance->manifest.id, L"audio_app")) {
             audio_app_render(instance);
-        } else if (equals_chars(instance->manifest.id, L"sysinfo_app")) {
+        } else if (app_utils_equals(instance->manifest.id, L"sysinfo_app")) {
             sysinfo_app_render(instance);
         }
     }
@@ -785,8 +465,8 @@ static void set_sdk_app_content(app_instance_t *instance) {
 
 BOOLEAN app_launch(const CHAR16 *id) {
     // Check if this is an SDK app
-    if (equals_chars(id, L"disk_app") || equals_chars(id, L"network_app") ||
-        equals_chars(id, L"audio_app") || equals_chars(id, L"sysinfo_app")) {
+    if (app_utils_equals(id, L"disk_app") || app_utils_equals(id, L"network_app") ||
+        app_utils_equals(id, L"audio_app") || app_utils_equals(id, L"sysinfo_app")) {
         return app_instance_launch(id, sdk_app_task, set_sdk_app_content);
     }
     // Legacy console apps
@@ -803,8 +483,8 @@ void app_launch_core_suite(void) {
 
     for (UINTN i = 0; i < (sizeof(defaults) / sizeof(defaults[0])); ++i) {
         app_manifest_t manifest;
-        copy_chars(manifest.id, defaults[i].id, 24);
-        copy_chars(manifest.title, defaults[i].title, 32);
+        app_utils_copy_chars(manifest.id, defaults[i].id, 24);
+        app_utils_copy_chars(manifest.title, defaults[i].title, 32);
         manifest.capabilities = defaults[i].capabilities;
         manifest.start_x = defaults[i].start_x;
         manifest.start_y = defaults[i].start_y;

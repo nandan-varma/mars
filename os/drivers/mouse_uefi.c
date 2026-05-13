@@ -1,5 +1,5 @@
 #include "mouse_uefi.h"
-#include "mouse_internal.h"
+#include "internal/mouse_internal.h"
 
 // SECURITY FIX (HIGH #8): Reduce unbounded polling timeout from 100000 to 1000
 // to prevent potential DoS via stuck hardware. This maintains responsiveness

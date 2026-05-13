@@ -1,4 +1,4 @@
-#include "vm_internal.h"
+#include "internal/vm_internal.h"
 
 #include "memory.h"
 

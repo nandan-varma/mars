@@ -1,4 +1,4 @@
-#include "wm_internal.h"
+#include "internal/wm_internal.h"
 
 #include "framebuffer.h"
 #include "input.h"

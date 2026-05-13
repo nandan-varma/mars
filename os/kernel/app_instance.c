@@ -1,4 +1,4 @@
-#include "app_internal.h"
+#include "internal/app_internal.h"
 
 #include "heap.h"
 #include "process.h"

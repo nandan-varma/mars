@@ -3,7 +3,7 @@
 #include "app.h"
 #include "diag.h"
 #include "heap.h"
-#include "app_internal.h"
+#include "internal/app_internal.h"
 #include "process.h"
 #include "scheduler.h"
 #include "timer.h"

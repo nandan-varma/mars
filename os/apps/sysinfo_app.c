@@ -7,7 +7,7 @@
 #include "memory.h"
 #include "heap.h"
 #include "wm.h"
-#include "app_internal.h"
+#include "internal/app_internal.h"
 
 typedef struct {
     CHAR16 content[512];

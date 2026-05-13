@@ -1,4 +1,4 @@
-#include "mouse_internal.h"
+#include "internal/mouse_internal.h"
 
 UINTN poll_simple_pointer(input_event_t *events_out, UINTN max_events) {
     if (g_simple_count == 0 || events_out == NULL || max_events == 0) {
