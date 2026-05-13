@@ -119,12 +119,17 @@ SRCS := \
 	apps/file_manager.c \
 	apps/system_monitor.c \
 	kernel/vfs.c \
+	kernel/fat.c \
 	drivers/input.c \
 	drivers/keyboard_uefi.c \
 	drivers/mouse_uefi.c \
 	drivers/mouse_ps2.c \
 	drivers/mouse_simple.c \
 	drivers/mouse_absolute.c \
+	drivers/block.c \
+	drivers/network.c \
+	kernel/network.c \
+	drivers/audio.c \
 	graphics/framebuffer.c \
 	graphics/font8x16.c \
 	gui/wm.c \
@@ -204,7 +209,10 @@ run: all
 			$(QEMU_INPUT_DEVICES) \
 			-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
 			-drive if=pflash,format=raw,file=$(OVMF_VARS) \
+			-drive if=ide,index=0,format=raw,file=$(DISK_IMAGE) \
 			-drive format=raw,file=fat:rw:$(ESP_DIR) \
+			-netdev user,id=net0,ipv6=off \
+			-device e1000,netdev=net0 \
 			-serial stdio; \
 	else \
 		echo "OVMF_VARS not found; running without vars pflash."; \
@@ -213,7 +221,10 @@ run: all
 			-display $(QEMU_DISPLAY) \
 			$(QEMU_INPUT_DEVICES) \
 			-drive if=pflash,format=raw,readonly=on,file=$(OVMF_CODE) \
+			-drive if=ide,index=0,format=raw,file=$(DISK_IMAGE) \
 			-drive format=raw,file=fat:rw:$(ESP_DIR) \
+			-netdev user,id=net0,ipv6=off \
+			-device e1000,netdev=net0 \
 			-serial stdio; \
 	fi
 

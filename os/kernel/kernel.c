@@ -15,9 +15,10 @@
 #include "vfs.h"
 #include "vm.h"
 #include "wm.h"
+#include "block.h"
 
 #ifndef SCHED_TIMER_PREEMPTIVE
-#define SCHED_TIMER_PREEMPTIVE 0
+#define SCHED_TIMER_PREEMPTIVE 1
 #endif
 
 static void on_timer_interrupt(UINTN vector, UINT64 a, UINT64 b, UINT64 c) {
@@ -181,6 +182,7 @@ static BOOLEAN stage_wm_init(const platform_context_t *platform) {
 static BOOLEAN stage_vfs_init(const platform_context_t *platform) {
     (void)platform;
     vfs_init();
+    vfs_mount_block_device(0);
     vfs_block_device_t boot_device;
     boot_device.block_size = 512;
     boot_device.block_count = 16384;
