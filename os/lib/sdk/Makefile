@@ -12,15 +12,22 @@ SDK_LIBRARY = libmarssdk.a
 # Include paths relative to os/lib/sdk directory
 INCLUDE_FLAGS = -I../../include -I../../include/sdk
 
-# Use MinGW for consistent symbol names with kernel. Allow override so the
-# parent Makefile or a CI runner can pin a specific toolchain, but fall back
-# to PATH lookup so this works on Linux as well as macOS.
+# Use MinGW for consistent PE/COFF objects that link with the kernel.
+# `?=` doesn't help here because Make's built-in default for CC is "cc",
+# so we must override unless the caller explicitly set CC/AR themselves.
 MINGW_PREFIX ?= x86_64-w64-mingw32-
-CC ?= $(shell command -v $(MINGW_PREFIX)gcc 2>/dev/null)
-AR ?= $(shell command -v $(MINGW_PREFIX)ar 2>/dev/null)
+ifeq ($(origin CC),default)
+CC := $(shell command -v $(MINGW_PREFIX)gcc 2>/dev/null)
+endif
+ifeq ($(origin AR),default)
+AR := $(shell command -v $(MINGW_PREFIX)ar 2>/dev/null)
+endif
 
 ifeq ($(strip $(CC)),)
 $(error No $(MINGW_PREFIX)gcc on PATH. Install via os/scripts/setup_linux_toolchain.sh or setup_macos_toolchain.sh)
+endif
+ifeq ($(strip $(AR)),)
+$(error No $(MINGW_PREFIX)ar on PATH)
 endif
 
 CFLAGS += $(INCLUDE_FLAGS) -ffreestanding -fshort-wchar -fno-stack-protector -mno-red-zone -Wall -Wextra -Werror -O2

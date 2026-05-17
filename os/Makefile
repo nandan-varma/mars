@@ -195,7 +195,7 @@ user-apps:
 
 disk-image:
 	@mkdir -p $(BUILD_DIR)
-	@dd if=/dev/zero of=$(DISK_IMAGE) bs=1m count=64 2>/dev/null
+	@dd if=/dev/zero of=$(DISK_IMAGE) bs=1048576 count=64 2>/dev/null
 
 run: all
 	@if [ -z "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_CODE)" ]; then \
