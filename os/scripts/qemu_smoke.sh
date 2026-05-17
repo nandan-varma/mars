@@ -84,16 +84,18 @@ echo "[smoke] sentinel:  '$SENTINEL'" >&2
 # -no-reboot so a triple fault halts instead of looping forever.
 # nographic puts everything we care about onto the serial file already.
 # Force TCG accel — GitHub runners don't have KVM and QEMU sometimes asserts
-# on auto-detection. Also write QEMU's own stderr alongside the serial log
-# so an abort like SIGABRT leaves a trail.
+# on auto-detection. Drop the unused IDE drive (the kernel boots straight
+# from the ESP) and use q35 which is the modern reference machine and
+# more consistently supported across QEMU versions. Capture QEMU's own
+# stderr to qemu.stderr so an abort like SIGABRT leaves a trail.
 "$QEMU" \
-  -machine pc,accel=tcg -m 512M \
+  -machine q35,accel=tcg -m 512M \
   -display none \
   -no-reboot \
   -drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE" \
-  -drive "if=ide,index=0,format=raw,file=$PRIVATE_IMG" \
   -drive "format=raw,file=fat:rw:$PRIVATE_ESP" \
   -serial "file:$SERIAL_LOG" \
+  -monitor none \
   2> "$ARTIFACTS_DIR/qemu.stderr" \
   &
 QEMU_PID=$!
