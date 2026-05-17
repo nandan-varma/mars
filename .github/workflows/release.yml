@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Hermetic release build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "name=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build hermetic image
+        run: docker build -t marsos-build .
+
+      - name: Build BOOTX64.EFI inside image
+        run: docker run --rm -v "$PWD":/src -w /src marsos-build make -C os ci
+
+      - name: Stage release artifacts
+        run: |
+          set -e
+          mkdir -p release
+          TAG="${{ steps.tag.outputs.name }}"
+          cp os/esp/EFI/BOOT/BOOTX64.EFI "release/BOOTX64-${TAG}.EFI"
+          (cd release && sha256sum "BOOTX64-${TAG}.EFI" > SHA256SUMS)
+          cat release/SHA256SUMS
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ steps.tag.outputs.name }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: ${{ steps.tag.outputs.name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            release/BOOTX64-${{ steps.tag.outputs.name }}.EFI
+            release/SHA256SUMS

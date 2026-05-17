@@ -869,7 +869,7 @@ BOOLEAN sdk_component_handle_input(sdk_component_t *comp, const input_event_t *e
                     if (sdk_input_get_char(event, &ch)) {
                         UINTN buf_capacity = sizeof(comp->data.textfield.text) / sizeof(CHAR16) - 1;
                         /* Ensure we have room both in buffer and per-max_len */
-                        if (comp->data.textfield.text_len < comp->data.textfield.max_len && comp->data.textfield.text_len < (INT32)buf_capacity) {
+                        if (comp->data.textfield.text_len < comp->data.textfield.max_len && comp->data.textfield.text_len < buf_capacity) {
                             /* Normalize cursor position */
                             if ((UINTN)comp->data.textfield.cursor_pos > comp->data.textfield.text_len) {
                                 comp->data.textfield.cursor_pos = (UINTN)comp->data.textfield.text_len;
@@ -882,7 +882,7 @@ BOOLEAN sdk_component_handle_input(sdk_component_t *comp, const input_event_t *e
                                 comp->data.textfield.cursor_pos = comp->data.textfield.text_len;
                             } else {
                                 /* Insert: shift right to make room */
-                                for (INT32 p = comp->data.textfield.text_len; p > comp->data.textfield.cursor_pos; --p) {
+                                for (UINTN p = comp->data.textfield.text_len; p > comp->data.textfield.cursor_pos; --p) {
                                     comp->data.textfield.text[p] = comp->data.textfield.text[p - 1];
                                 }
                                 comp->data.textfield.text[comp->data.textfield.cursor_pos] = ch;

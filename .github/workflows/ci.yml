@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: build + host tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain (Linux)
+        if: runner.os == 'Linux'
+        run: ./os/scripts/setup_linux_toolchain.sh
+
+      - name: Install toolchain (macOS)
+        if: runner.os == 'macOS'
+        run: ./os/scripts/setup_macos_toolchain.sh
+
+      - name: Print toolchain versions
+        run: |
+          set -e
+          x86_64-w64-mingw32-gcc --version | head -n 1
+          cc --version | head -n 1
+          make --version | head -n 1
+
+      - name: Build + host tests (make ci)
+        run: make -C os ci
+
+      - name: SHA256 of BOOTX64.EFI
+        run: |
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum os/esp/EFI/BOOT/BOOTX64.EFI
+          else
+            shasum -a 256 os/esp/EFI/BOOT/BOOTX64.EFI
+          fi
+
+      - name: Upload BOOTX64.EFI
+        uses: actions/upload-artifact@v4
+        with:
+          name: BOOTX64-${{ matrix.os }}
+          path: os/esp/EFI/BOOT/BOOTX64.EFI
+          if-no-files-found: error
+          retention-days: 14
+
+  docker-reproducible:
+    name: docker hermetic build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build hermetic image
+        run: docker build -t marsos-build .
+
+      - name: Run make ci inside the image
+        run: docker run --rm -v "$PWD":/src -w /src marsos-build make -C os ci
+
+      - name: SHA256 of BOOTX64.EFI (hermetic)
+        id: sha
+        run: |
+          sum=$(sha256sum os/esp/EFI/BOOT/BOOTX64.EFI | awk '{print $1}')
+          echo "hermetic SHA256: $sum"
+          echo "sha=$sum" >> "$GITHUB_OUTPUT"
+
+      - name: Upload hermetic BOOTX64.EFI
+        uses: actions/upload-artifact@v4
+        with:
+          name: BOOTX64-hermetic
+          path: os/esp/EFI/BOOT/BOOTX64.EFI
+          if-no-files-found: error
+          retention-days: 14

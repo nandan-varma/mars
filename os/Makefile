@@ -144,7 +144,7 @@ SDK_LIB := lib/sdk/libmarssdk.a
 
 OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS))
 
-.PHONY: all clean run debug esp run-gui run-fs run-apps user-apps disk-image test-host
+.PHONY: all clean run debug esp run-gui run-fs run-apps user-apps disk-image test-host ci
 
 HOST_TEST_BINS := \
 	$(BUILD_DIR)/tests/test_event_bus_contract \
@@ -322,3 +322,10 @@ test-host: $(HOST_TEST_BINS)
 		echo "[test] $$t"; \
 		$$t || exit 1; \
 	done
+
+# Full gate run by CI and reproducible-build verification.
+# Builds from a clean tree so stale objects can't mask broken changes.
+ci:
+	$(MAKE) clean
+	$(MAKE) all
+	$(MAKE) test-host

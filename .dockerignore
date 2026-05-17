@@ -1,0 +1,7 @@
+os/build
+os/esp/EFI/BOOT/BOOTX64.EFI
+**/*.o
+**/*.so
+.git
+.github
+OVMF_VARS.fd

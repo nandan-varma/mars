@@ -1,6 +1,11 @@
 # OS build artifacts
 os/build/
 os/esp/EFI/BOOT/BOOTX64.EFI
+os/lib/sdk/*.o
+os/lib/sdk/*.a
+
+# Release staging
+release/
 
 # Firmware variable store
 os/OVMF_VARS.fd
