@@ -1,6 +1,7 @@
 #include "uefi.h"
 
 #include "boot_info.h"
+#include "exit_boot_services.h"
 #include "kernel.h"
 #include "serial.h"
 
@@ -210,6 +211,15 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     boot_info.input.simple_pointer = simple_pointer;
     boot_info.input.absolute_pointer = absolute_pointer;
     boot_info.runtime.runtime_services = system_table->RuntimeServices;
+
+#ifdef MARS_EXIT_BOOT_SERVICES
+    serial_write_str("[mars] efi_main:exit_bs\r\n");
+    EFI_STATUS exit_status = exit_boot_services(image_handle, system_table, &boot_info);
+    if (EFI_ERROR(exit_status)) {
+        serial_write_str("[mars] efi_main:exit_bs:fail\r\n");
+        return exit_status;
+    }
+#endif
 
     serial_write_str("[mars] efi_main:handoff\r\n");
     kernel_main(&boot_info);

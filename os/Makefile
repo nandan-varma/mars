@@ -68,6 +68,15 @@ ifeq ($(notdir $(CC)),clang)
 	CFLAGS += --target=x86_64-unknown-elf
 endif
 
+# Real-hardware bootability — turn on at build time to call ExitBootServices
+# from efi_main. Default 0 keeps Boot Services live, matching the QEMU dev
+# loop. Set EXIT_BOOT_SERVICES=1 once you're ready to test on real HW or
+# under a stricter firmware (see os/docs/HARDWARE_COMPAT.md).
+EXIT_BOOT_SERVICES ?= 0
+ifeq ($(EXIT_BOOT_SERVICES),1)
+CFLAGS += -DMARS_EXIT_BOOT_SERVICES
+endif
+
 ifeq ($(strip $(CC)),)
 $(error No C compiler found. Install x86_64-elf-gcc or clang)
 endif
@@ -89,6 +98,7 @@ endif
 
 SRCS := \
 	boot/efi_main.c \
+	boot/exit_boot_services.c \
 	kernel/kernel.c \
 	kernel/timer.c \
 	kernel/memory.c \
