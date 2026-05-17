@@ -83,24 +83,22 @@ echo "[smoke] sentinel:  '$SENTINEL'" >&2
 
 # -no-reboot so a triple fault halts instead of looping forever.
 # nographic puts everything we care about onto the serial file already.
-# Build a real FAT image of the ESP via mtools, then attach it as an IDE
-# drive. Avoids QEMU's flaky vvfat ("fat:rw:") backend which has been
-# silently SIGABRT'ing on GitHub's ubuntu-latest runner. Requires mtools
-# on the host (Debian: mtools; macOS Homebrew: mtools).
-ESP_FAT_IMG="$ARTIFACTS_DIR/esp.img"
-if command -v mformat >/dev/null 2>&1 && command -v mcopy >/dev/null 2>&1; then
-  # 32MiB FAT16 image — plenty of room for BOOTX64.EFI plus the small
-  # .app manifests in user-apps.
-  dd if=/dev/zero of="$ESP_FAT_IMG" bs=1048576 count=32 status=none
-  mformat -i "$ESP_FAT_IMG" -F -v MARSOS ::
-  mmd -i "$ESP_FAT_IMG" ::/EFI
-  mmd -i "$ESP_FAT_IMG" ::/EFI/BOOT
-  mcopy -i "$ESP_FAT_IMG" -s "$OS_DIR/esp/EFI/BOOT/BOOTX64.EFI" ::/EFI/BOOT/BOOTX64.EFI
-  ESP_DRIVE_ARG=("-drive" "format=raw,file=$ESP_FAT_IMG,if=ide")
-  echo "[smoke] using real FAT image at $ESP_FAT_IMG" >&2
+# Build a proper bootable disk image (GPT + ESP partition) via the same
+# script the M3 USB workflow uses. OVMF requires a partition table to
+# recognize a FAT volume as an ESP; a raw FAT image without one fails to
+# load Boot0001 and falls through to PXE.
+#
+# Falls back to QEMU's flaky vvfat backend if the partitioning tools
+# (sgdisk + mtools) aren't installed — vvfat works on macOS but
+# SIGABRTs on Ubuntu CI, hence the prefer-real-image path.
+DISK_IMG="$ARTIFACTS_DIR/smoke-disk.img"
+if command -v sgdisk >/dev/null 2>&1 && command -v mformat >/dev/null 2>&1; then
+  OUT="$DISK_IMG" IMAGE_MB=64 "$OS_DIR/scripts/make_usb_image.sh" >&2
+  ESP_DRIVE_ARG=("-drive" "format=raw,file=$DISK_IMG,if=ide")
+  echo "[smoke] using bootable disk image at $DISK_IMG" >&2
 else
   ESP_DRIVE_ARG=("-drive" "format=raw,file=fat:rw:$PRIVATE_ESP")
-  echo "[smoke] mtools not installed — falling back to QEMU vvfat (less reliable)" >&2
+  echo "[smoke] sgdisk + mtools missing — falling back to QEMU vvfat (less reliable on Linux CI)" >&2
 fi
 
 # Force TCG accel — GitHub runners don't have KVM and QEMU sometimes asserts
