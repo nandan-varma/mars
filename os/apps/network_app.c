@@ -48,17 +48,17 @@ static void update_network_info(void) {
 
     if (!g_net_state->network_present) {
         const CHAR16 *msg = L"No NIC detected\n\nUse QEMU with:\n-netdev user,device e1000";
-        for (UINTN i = 0; msg[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; msg[i] != 0 && idx < 511; ++i) {
             g_net_state->content[idx++] = msg[i];
         }
     } else {
         const CHAR16 *connected = L"Status: Connected\n";
-        for (UINTN i = 0; connected[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; connected[i] != 0 && idx < 511; ++i) {
             g_net_state->content[idx++] = connected[i];
         }
 
         const CHAR16 *mac_str = L"MAC: ";
-        for (UINTN i = 0; mac_str[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; mac_str[i] != 0 && idx < 511; ++i) {
             g_net_state->content[idx++] = mac_str[i];
         }
         for (UINTN i = 0; i < 6; ++i) {
@@ -71,7 +71,7 @@ static void update_network_info(void) {
         g_net_state->content[idx++] = L'\n';
 
         const CHAR16 *ip_label = L"IP: ";
-        for (UINTN i = 0; ip_label[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; ip_label[i] != 0 && idx < 511; ++i) {
             g_net_state->content[idx++] = ip_label[i];
         }
         for (UINTN i = 0; i < 4; ++i) {
@@ -92,7 +92,7 @@ static void update_network_info(void) {
                 }
             }
             octet_buf[octet_idx] = 0;
-            for (UINTN j = 0; octet_buf[j] != 0 && idx < 500; ++j) {
+            for (UINTN j = 0; octet_buf[j] != 0 && idx < 511; ++j) {
                 g_net_state->content[idx++] = octet_buf[j];
             }
             if (i < 3) g_net_state->content[idx++] = L'.';
@@ -100,12 +100,12 @@ static void update_network_info(void) {
         g_net_state->content[idx++] = L'\n';
 
         const CHAR16 *proto = L"\nProtocols: IP/ICMP/UDP/TCP\n";
-        for (UINTN i = 0; proto[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; proto[i] != 0 && idx < 511; ++i) {
             g_net_state->content[idx++] = proto[i];
         }
 
         const CHAR16 *hint = L"Press T to test network";
-        for (UINTN i = 0; hint[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; hint[i] != 0 && idx < 511; ++i) {
             g_net_state->content[idx++] = hint[i];
         }
     }

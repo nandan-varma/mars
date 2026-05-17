@@ -42,12 +42,12 @@ static void update_audio_info(void) {
 
     if (g_audio_state->speaker_available) {
         const CHAR16 *status = L"PC Speaker: OK\n\n";
-        for (UINTN i = 0; status[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; status[i] != 0 && idx < 511; ++i) {
             g_audio_state->content[idx++] = status[i];
         }
 
         const CHAR16 *beep_str = L"Beeps: ";
-        for (UINTN i = 0; beep_str[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; beep_str[i] != 0 && idx < 511; ++i) {
             g_audio_state->content[idx++] = beep_str[i];
         }
 
@@ -68,18 +68,18 @@ static void update_audio_info(void) {
             }
         }
         count_buf[count_idx] = 0;
-        for (UINTN i = 0; count_buf[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; count_buf[i] != 0 && idx < 511; ++i) {
             g_audio_state->content[idx++] = count_buf[i];
         }
         g_audio_state->content[idx++] = L'\n';
 
         const CHAR16 *controls = L"\nFrequencies:\n1: 100 Hz\n2: 440 Hz\n3: 1000 Hz\n4: 2000 Hz\n\nPress 1-4 to play";
-        for (UINTN i = 0; controls[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; controls[i] != 0 && idx < 511; ++i) {
             g_audio_state->content[idx++] = controls[i];
         }
     } else {
         const CHAR16 *no_audio = L"No audio device\n\nUse real hardware or\nQEMU with HDA";
-        for (UINTN i = 0; no_audio[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; no_audio[i] != 0 && idx < 511; ++i) {
             g_audio_state->content[idx++] = no_audio[i];
         }
     }

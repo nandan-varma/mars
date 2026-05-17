@@ -29,6 +29,7 @@ BOOLEAN editor_init(UINT32 window_id) {
     // Create text field
     g_editor_state->text_field = sdk_component_create(SDK_COMPONENT_TEXT_FIELD);
     if (g_editor_state->text_field == NULL) {
+        editor_cleanup();
         return FALSE;
     }
     
@@ -39,6 +40,7 @@ BOOLEAN editor_init(UINT32 window_id) {
     // Create scroll slider
     g_editor_state->scroll_slider = sdk_component_create(SDK_COMPONENT_SLIDER);
     if (g_editor_state->scroll_slider == NULL) {
+        editor_cleanup();
         return FALSE;
     }
     
@@ -67,8 +69,12 @@ void editor_render(void) {
     sdk_graphics_text(12, 165, L"4", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
     sdk_graphics_text(12, 205, L"5", SDK_COLOR_TEXT_SECONDARY, SDK_COLOR_BG_LIGHT);
     
-    sdk_component_render(g_editor_state->text_field);
-    sdk_component_render(g_editor_state->scroll_slider);
+    if (g_editor_state->text_field != NULL) {
+        sdk_component_render(g_editor_state->text_field);
+    }
+    if (g_editor_state->scroll_slider != NULL) {
+        sdk_component_render(g_editor_state->scroll_slider);
+    }
 }
 
 void editor_handle_input(const input_event_t *event) {
@@ -76,8 +82,12 @@ void editor_handle_input(const input_event_t *event) {
         return;
     }
     
-    sdk_component_handle_input(g_editor_state->text_field, event);
-    sdk_component_handle_input(g_editor_state->scroll_slider, event);
+    if (g_editor_state->text_field != NULL) {
+        sdk_component_handle_input(g_editor_state->text_field, event);
+    }
+    if (g_editor_state->scroll_slider != NULL) {
+        sdk_component_handle_input(g_editor_state->scroll_slider, event);
+    }
 }
 
 void editor_cleanup(void) {

@@ -313,7 +313,9 @@ void sdk_button_set_label(sdk_component_t *comp, const CHAR16 *label) {
     }
     
     UINTN i = 0;
-    while (label[i] != L'\0' && i < 63) {
+    /* Bound by actual buffer size to avoid off-by-one errors */
+    UINTN max_label = sizeof(comp->data.button.label) / sizeof(CHAR16) - 1;
+    while (label[i] != L'\0' && i < max_label) {
         comp->data.button.label[i] = label[i];
         i++;
     }
@@ -346,7 +348,10 @@ void sdk_textfield_set_text(sdk_component_t *comp, const CHAR16 *text) {
     }
     
     UINTN i = 0;
-    while (text[i] != L'\0' && i < SDK_TEXTFIELD_MAX_CHARS - 1) {
+    /* Ensure we never write past the text buffer capacity */
+    UINTN max_text = sizeof(comp->data.textfield.text) / sizeof(CHAR16) - 1;
+    UINTN limit = sdk_min(max_text, comp->data.textfield.max_len);
+    while (text[i] != L'\0' && i < limit) {
         comp->data.textfield.text[i] = text[i];
         i++;
     }
@@ -374,7 +379,8 @@ void sdk_textfield_set_placeholder(sdk_component_t *comp, const CHAR16 *placehol
     }
     
     UINTN i = 0;
-    while (placeholder[i] != L'\0' && i < 63) {
+    UINTN max_ph = sizeof(comp->data.textfield.placeholder) / sizeof(CHAR16) - 1;
+    while (placeholder[i] != L'\0' && i < max_ph) {
         comp->data.textfield.placeholder[i] = placeholder[i];
         i++;
     }
@@ -497,7 +503,8 @@ void sdk_checkbox_set_label(sdk_component_t *comp, const CHAR16 *label) {
     }
     
     UINTN i = 0;
-    while (label[i] != L'\0' && i < 63) {
+    UINTN max_lbl = sizeof(comp->data.checkbox.label) / sizeof(CHAR16) - 1;
+    while (label[i] != L'\0' && i < max_lbl) {
         comp->data.checkbox.label[i] = label[i];
         i++;
     }
@@ -558,7 +565,8 @@ void sdk_label_set_text(sdk_component_t *comp, const CHAR16 *text) {
     }
     
     UINTN i = 0;
-    while (text[i] != L'\0' && i < 255) {
+    UINTN max_label = sizeof(comp->data.label.text) / sizeof(CHAR16) - 1;
+    while (text[i] != L'\0' && i < max_label) {
         comp->data.label.text[i] = text[i];
         i++;
     }
@@ -609,7 +617,8 @@ void sdk_dialog_set_title(sdk_component_t *comp, const CHAR16 *title) {
     }
     
     UINTN i = 0;
-    while (title[i] != L'\0' && i < 63) {
+    UINTN max_title = sizeof(comp->data.dialog.title) / sizeof(CHAR16) - 1;
+    while (title[i] != L'\0' && i < max_title) {
         comp->data.dialog.title[i] = title[i];
         i++;
     }
@@ -622,7 +631,8 @@ void sdk_dialog_set_message(sdk_component_t *comp, const CHAR16 *message) {
     }
     
     UINTN i = 0;
-    while (message[i] != L'\0' && i < 511) {
+    UINTN max_msg = sizeof(comp->data.dialog.message) / sizeof(CHAR16) - 1;
+    while (message[i] != L'\0' && i < max_msg) {
         comp->data.dialog.message[i] = message[i];
         i++;
     }
@@ -638,7 +648,8 @@ void sdk_dialog_add_button(sdk_component_t *comp, const CHAR16 *label, INT32 but
     }
     
     UINTN i = 0;
-    while (label[i] != L'\0' && i < 63) {
+    UINTN max_btn = sizeof(comp->data.dialog.buttons[comp->data.dialog.button_count].label) / sizeof(CHAR16) - 1;
+    while (label[i] != L'\0' && i < max_btn) {
         comp->data.dialog.buttons[comp->data.dialog.button_count].label[i] = label[i];
         i++;
     }
@@ -791,7 +802,7 @@ void sdk_component_render(sdk_component_t *comp) {
             }
             
             // Draw semi-transparent overlay
-            sdk_graphics_rect(0, 0, 1024, 768, 0x80000000);
+            sdk_graphics_rect(0, 0, (INT32)sdk_graphics_get_width(), (INT32)sdk_graphics_get_height(), 0x80000000);
             
             // Draw dialog box
             INT32 dialog_x = 200;
@@ -856,10 +867,28 @@ BOOLEAN sdk_component_handle_input(sdk_component_t *comp, const input_event_t *e
                 if (sdk_input_is_printable(event)) {
                     CHAR16 ch;
                     if (sdk_input_get_char(event, &ch)) {
-                        if (comp->data.textfield.text_len < comp->data.textfield.max_len) {
-                            comp->data.textfield.text[comp->data.textfield.cursor_pos] = ch;
-                            comp->data.textfield.cursor_pos++;
-                            comp->data.textfield.text_len++;
+                        UINTN buf_capacity = sizeof(comp->data.textfield.text) / sizeof(CHAR16) - 1;
+                        /* Ensure we have room both in buffer and per-max_len */
+                        if (comp->data.textfield.text_len < comp->data.textfield.max_len && comp->data.textfield.text_len < (INT32)buf_capacity) {
+                            /* Normalize cursor position */
+                            if ((UINTN)comp->data.textfield.cursor_pos > comp->data.textfield.text_len) {
+                                comp->data.textfield.cursor_pos = (UINTN)comp->data.textfield.text_len;
+                            }
+
+                            /* If inserting at end, append */
+                            if ((UINTN)comp->data.textfield.cursor_pos == comp->data.textfield.text_len) {
+                                comp->data.textfield.text[comp->data.textfield.text_len] = ch;
+                                comp->data.textfield.text_len++;
+                                comp->data.textfield.cursor_pos = comp->data.textfield.text_len;
+                            } else {
+                                /* Insert: shift right to make room */
+                                for (INT32 p = comp->data.textfield.text_len; p > comp->data.textfield.cursor_pos; --p) {
+                                    comp->data.textfield.text[p] = comp->data.textfield.text[p - 1];
+                                }
+                                comp->data.textfield.text[comp->data.textfield.cursor_pos] = ch;
+                                comp->data.textfield.text_len++;
+                                comp->data.textfield.cursor_pos++;
+                            }
                             comp->data.textfield.text[comp->data.textfield.text_len] = L'\0';
                             if (comp->on_change != NULL) {
                                 comp->on_change(comp);
@@ -868,7 +897,12 @@ BOOLEAN sdk_component_handle_input(sdk_component_t *comp, const input_event_t *e
                         }
                     }
                 } else if (sdk_input_is_backspace(event)) {
-                    if (comp->data.textfield.cursor_pos > 0) {
+                    if (comp->data.textfield.cursor_pos > 0 && comp->data.textfield.text_len > 0) {
+                        /* Remove character before cursor and shift left */
+                        INT32 pos = comp->data.textfield.cursor_pos - 1;
+                        for (INT32 p = pos; p < (INT32)comp->data.textfield.text_len - 1; ++p) {
+                            comp->data.textfield.text[p] = comp->data.textfield.text[p + 1];
+                        }
                         comp->data.textfield.cursor_pos--;
                         comp->data.textfield.text_len--;
                         comp->data.textfield.text[comp->data.textfield.text_len] = L'\0';

@@ -47,7 +47,7 @@ static void update_disk_info(void) {
     if (device_count == 0) {
         g_disk_state->disk_present = FALSE;
         const CHAR16 *msg = L"No disk detected";
-        for (UINTN i = 0; msg[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; msg[i] != 0 && idx < 511; ++i) {
             g_disk_state->content[idx++] = msg[i];
         }
     } else {
@@ -57,12 +57,12 @@ static void update_disk_info(void) {
         g_disk_state->disk_size_mb = (UINT32)((blocks * bs) / (1024 * 1024));
 
         const CHAR16 *present = L"Disk: Present\n";
-        for (UINTN i = 0; present[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; present[i] != 0 && idx < 511; ++i) {
             g_disk_state->content[idx++] = present[i];
         }
 
         const CHAR16 *size_str = L"Size: ";
-        for (UINTN i = 0; size_str[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; size_str[i] != 0 && idx < 511; ++i) {
             g_disk_state->content[idx++] = size_str[i];
         }
 
@@ -83,22 +83,22 @@ static void update_disk_info(void) {
             }
         }
         size_buf[size_idx] = 0;
-        for (UINTN i = 0; size_buf[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; size_buf[i] != 0 && idx < 511; ++i) {
             g_disk_state->content[idx++] = size_buf[i];
         }
 
         const CHAR16 *mb_str = L" MB\n";
-        for (UINTN i = 0; mb_str[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; mb_str[i] != 0 && idx < 511; ++i) {
             g_disk_state->content[idx++] = mb_str[i];
         }
 
         const CHAR16 *fs_str = L"FS: FAT16/32\n";
-        for (UINTN i = 0; fs_str[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; fs_str[i] != 0 && idx < 511; ++i) {
             g_disk_state->content[idx++] = fs_str[i];
         }
 
         const CHAR16 *hint = L"\nPress R to refresh";
-        for (UINTN i = 0; hint[i] != 0 && idx < 500; ++i) {
+        for (UINTN i = 0; hint[i] != 0 && idx < 511; ++i) {
             g_disk_state->content[idx++] = hint[i];
         }
     }

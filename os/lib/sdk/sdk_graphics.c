@@ -348,13 +348,16 @@ void sdk_graphics_present_region(INT32 x, INT32 y, INT32 w, INT32 h) {
 // ============================================================================
 
 UINT32 sdk_graphics_get_width(void) {
-    // Need to get this from framebuffer; for now return a default
-    // In production, would access framebuffer_t global
-    return 1024;  // Default UEFI resolution
+    // Query actual framebuffer dimensions when available
+    UINT32 w = framebuffer_get_width();
+    if (w == 0) return 1024; // fallback
+    return w;
 }
 
 UINT32 sdk_graphics_get_height(void) {
-    return 768;  // Default UEFI resolution
+    UINT32 h = framebuffer_get_height();
+    if (h == 0) return 768; // fallback
+    return h;
 }
 
 UINT32 sdk_graphics_blend_color(UINT32 color1, UINT32 color2, UINT8 alpha) {

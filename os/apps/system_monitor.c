@@ -28,7 +28,10 @@ static void draw_progress_bar(INT32 x, INT32 y, INT32 width, INT32 height,
     sdk_graphics_rect(x, y, width, height, SDK_COLOR_BORDER);
     
     // Draw filled portion
-    INT32 filled_width = (width * percent) / 100;
+    if (width <= 0 || percent == 0) return;
+    // Use wider type to avoid INT32 overflow when multiplying
+    INT64 mul = (INT64)width * (INT64)percent;
+    INT32 filled_width = (INT32)(mul / 100);
     if (filled_width > 2) {
         sdk_graphics_rect(x + 1, y + 1, filled_width - 2, height - 2, color);
     }

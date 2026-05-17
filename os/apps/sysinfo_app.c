@@ -25,7 +25,7 @@ static void update_sysinfo(void) {
     UINTN idx = 0;
 
     const CHAR16 *title = L"System Information\n";
-    for (UINTN i = 0; title[i] != 0 && idx < 500; ++i) {
+    for (UINTN i = 0; title[i] != 0 && idx < 511; ++i) {
         g_sysinfo_state->content[idx++] = title[i];
     }
     g_sysinfo_state->content[idx++] = L'=';
@@ -34,14 +34,14 @@ static void update_sysinfo(void) {
 
     BOOLEAN preemptive = scheduler_timer_preemptive();
     const CHAR16 *sched = preemptive ? L"Scheduler: Preemptive" : L"Scheduler: Cooperative";
-    for (UINTN i = 0; sched[i] != 0 && idx < 500; ++i) {
+    for (UINTN i = 0; sched[i] != 0 && idx < 511; ++i) {
         g_sysinfo_state->content[idx++] = sched[i];
     }
     g_sysinfo_state->content[idx++] = L'\n';
 
     UINT32 task_count = scheduler_task_count();
     const CHAR16 *task_str = L"Tasks: ";
-    for (UINTN i = 0; task_str[i] != 0 && idx < 500; ++i) {
+    for (UINTN i = 0; task_str[i] != 0 && idx < 511; ++i) {
         g_sysinfo_state->content[idx++] = task_str[i];
     }
     UINT32 tasks = task_count;
@@ -52,7 +52,7 @@ static void update_sysinfo(void) {
     } else {
         CHAR16 rev[8];
         UINTN rev_idx = 0;
-        while (tasks > 0) {
+        while (tasks > 0 && rev_idx < (sizeof(rev) / sizeof(rev[0]))) {
             rev[rev_idx++] = L'0' + (tasks % 10);
             tasks /= 10;
         }
@@ -61,14 +61,14 @@ static void update_sysinfo(void) {
         }
     }
     task_buf[task_idx] = 0;
-    for (UINTN i = 0; task_buf[i] != 0 && idx < 500; ++i) {
+    for (UINTN i = 0; task_buf[i] != 0 && idx < 511; ++i) {
         g_sysinfo_state->content[idx++] = task_buf[i];
     }
     g_sysinfo_state->content[idx++] = L'\n';
 
     UINTN procs = process_count();
     const CHAR16 *proc_str = L"Processes: ";
-    for (UINTN i = 0; proc_str[i] != 0 && idx < 500; ++i) {
+    for (UINTN i = 0; proc_str[i] != 0 && idx < 511; ++i) {
         g_sysinfo_state->content[idx++] = proc_str[i];
     }
     CHAR16 proc_buf[8];
@@ -78,7 +78,7 @@ static void update_sysinfo(void) {
     } else {
         CHAR16 rev[8];
         UINTN rev_idx = 0;
-        while (procs > 0) {
+        while (procs > 0 && rev_idx < (sizeof(rev) / sizeof(rev[0]))) {
             rev[rev_idx++] = L'0' + (procs % 10);
             procs /= 10;
         }
@@ -87,7 +87,7 @@ static void update_sysinfo(void) {
         }
     }
     proc_buf[proc_idx] = 0;
-    for (UINTN i = 0; proc_buf[i] != 0 && idx < 500; ++i) {
+    for (UINTN i = 0; proc_buf[i] != 0 && idx < 511; ++i) {
         g_sysinfo_state->content[idx++] = proc_buf[i];
     }
     g_sysinfo_state->content[idx++] = L'\n';
@@ -95,7 +95,7 @@ static void update_sysinfo(void) {
     UINTN mem_used = heap_used_bytes();
     UINTN mem_total = heap_total_bytes();
     const CHAR16 *mem_str = L"Heap: ";
-    for (UINTN i = 0; mem_str[i] != 0 && idx < 500; ++i) {
+    for (UINTN i = 0; mem_str[i] != 0 && idx < 511; ++i) {
         g_sysinfo_state->content[idx++] = mem_str[i];
     }
     UINT32 mem_kb = (UINT32)(mem_used / 1024);
@@ -108,7 +108,7 @@ static void update_sysinfo(void) {
     } else {
         CHAR16 rev[12];
         UINTN rev_idx = 0;
-        while (mem > 0) {
+        while (mem > 0 && rev_idx < (sizeof(rev) / sizeof(rev[0]))) {
             rev[rev_idx++] = L'0' + (mem % 10);
             mem /= 10;
         }
@@ -123,7 +123,7 @@ static void update_sysinfo(void) {
     } else {
         CHAR16 rev[12];
         UINTN rev_idx = 0;
-        while (mem > 0) {
+        while (mem > 0 && rev_idx < (sizeof(rev) / sizeof(rev[0]))) {
             rev[rev_idx++] = L'0' + (mem % 10);
             mem /= 10;
         }
@@ -135,7 +135,7 @@ static void update_sysinfo(void) {
     mem_buf[mem_idx++] = L'K';
     mem_buf[mem_idx++] = L'B';
     mem_buf[mem_idx] = 0;
-    for (UINTN i = 0; mem_buf[i] != 0 && idx < 500; ++i) {
+    for (UINTN i = 0; mem_buf[i] != 0 && idx < 511; ++i) {
         g_sysinfo_state->content[idx++] = mem_buf[i];
     }
     g_sysinfo_state->content[idx++] = L'\n';
@@ -143,7 +143,7 @@ static void update_sysinfo(void) {
     UINT64 ticks = timer_ticks();
     UINT64 uptime = ticks / timer_hz();
     const CHAR16 *up_str = L"Uptime: ";
-    for (UINTN i = 0; up_str[i] != 0 && idx < 500; ++i) {
+    for (UINTN i = 0; up_str[i] != 0 && idx < 511; ++i) {
         g_sysinfo_state->content[idx++] = up_str[i];
     }
     UINT32 up = (UINT32)uptime;
@@ -154,7 +154,7 @@ static void update_sysinfo(void) {
     } else {
         CHAR16 rev[16];
         UINTN rev_idx = 0;
-        while (up > 0) {
+        while (up > 0 && rev_idx < (sizeof(rev) / sizeof(rev[0]))) {
             rev[rev_idx++] = L'0' + (up % 10);
             up /= 10;
         }
@@ -167,13 +167,13 @@ static void update_sysinfo(void) {
     up_buf[up_idx++] = L'e';
     up_buf[up_idx++] = L'c';
     up_buf[up_idx] = 0;
-    for (UINTN i = 0; up_buf[i] != 0 && idx < 500; ++i) {
+    for (UINTN i = 0; up_buf[i] != 0 && idx < 511; ++i) {
         g_sysinfo_state->content[idx++] = up_buf[i];
     }
     g_sysinfo_state->content[idx++] = L'\n';
 
     const CHAR16 *hz_str = L"HZ: ";
-    for (UINTN i = 0; hz_str[i] != 0 && idx < 500; ++i) {
+    for (UINTN i = 0; hz_str[i] != 0 && idx < 511; ++i) {
         g_sysinfo_state->content[idx++] = hz_str[i];
     }
     UINT32 hz = timer_hz();
@@ -184,7 +184,7 @@ static void update_sysinfo(void) {
     } else {
         CHAR16 rev[16];
         UINTN rev_idx = 0;
-        while (hz > 0) {
+        while (hz > 0 && rev_idx < (sizeof(rev) / sizeof(rev[0]))) {
             rev[rev_idx++] = L'0' + (hz % 10);
             hz /= 10;
         }
@@ -193,7 +193,7 @@ static void update_sysinfo(void) {
         }
     }
     hz_buf[hz_idx] = 0;
-    for (UINTN i = 0; hz_buf[i] != 0 && idx < 500; ++i) {
+    for (UINTN i = 0; hz_buf[i] != 0 && idx < 511; ++i) {
         g_sysinfo_state->content[idx++] = hz_buf[i];
     }
 

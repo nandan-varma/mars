@@ -202,22 +202,38 @@ BOOLEAN sdk_input_has_shift(const input_event_t *event) {
     if (event == NULL || !sdk_input_is_key_down(event)) {
         return FALSE;
     }
-    // Check shift state flags
-    return (0x00 & 0x01) != 0;  // Left or right shift
+    // Best-effort: detect common scan codes for left/right shift.
+    // Keyboard driver currently provides scan_code in event->data.key.scan_code.
+    // Use conservative checks for common PS/2/UEFI scan codes.
+    UINT16 sc = event->data.key.scan_code;
+    if (sc == 0x2A || sc == 0x36) { // Left Shift, Right Shift
+        return TRUE;
+    }
+    return FALSE;
 }
 
 BOOLEAN sdk_input_has_ctrl(const input_event_t *event) {
     if (event == NULL || !sdk_input_is_key_down(event)) {
         return FALSE;
     }
-    return (0x00 & 0x04) != 0;  // Left or right control
+    // Detect common control scan code
+    UINT16 sc = event->data.key.scan_code;
+    if (sc == 0x1D) { // Control
+        return TRUE;
+    }
+    return FALSE;
 }
 
 BOOLEAN sdk_input_has_alt(const input_event_t *event) {
     if (event == NULL || !sdk_input_is_key_down(event)) {
         return FALSE;
     }
-    return (0x00 & 0x10) != 0;  // Left or right alt
+    // Detect common alt scan code
+    UINT16 sc = event->data.key.scan_code;
+    if (sc == 0x38) { // Alt
+        return TRUE;
+    }
+    return FALSE;
 }
 
 // ============================================================================

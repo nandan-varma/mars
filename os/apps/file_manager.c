@@ -40,35 +40,47 @@ static void file_manager_init_files(file_manager_state_t *state) {
     state->selected_index = 0;
     
     // Add some sample files
-    copy_str16(state->files[state->file_count].name, L"[..]");
-    state->files[state->file_count].is_directory = TRUE;
-    state->files[state->file_count].size = 0;
-    state->file_count++;
+    if (state->file_count < 32) {
+        copy_str16(state->files[state->file_count].name, L"[..]");
+        state->files[state->file_count].is_directory = TRUE;
+        state->files[state->file_count].size = 0;
+        state->file_count++;
+    }
     
-    copy_str16(state->files[state->file_count].name, L"Documents");
-    state->files[state->file_count].is_directory = TRUE;
-    state->files[state->file_count].size = 0;
-    state->file_count++;
+    if (state->file_count < 32) {
+        copy_str16(state->files[state->file_count].name, L"Documents");
+        state->files[state->file_count].is_directory = TRUE;
+        state->files[state->file_count].size = 0;
+        state->file_count++;
+    }
     
-    copy_str16(state->files[state->file_count].name, L"Photos");
-    state->files[state->file_count].is_directory = TRUE;
-    state->files[state->file_count].size = 0;
-    state->file_count++;
+    if (state->file_count < 32) {
+        copy_str16(state->files[state->file_count].name, L"Photos");
+        state->files[state->file_count].is_directory = TRUE;
+        state->files[state->file_count].size = 0;
+        state->file_count++;
+    }
     
-    copy_str16(state->files[state->file_count].name, L"readme.txt");
-    state->files[state->file_count].is_directory = FALSE;
-    state->files[state->file_count].size = 1024;
-    state->file_count++;
+    if (state->file_count < 32) {
+        copy_str16(state->files[state->file_count].name, L"readme.txt");
+        state->files[state->file_count].is_directory = FALSE;
+        state->files[state->file_count].size = 1024;
+        state->file_count++;
+    }
     
-    copy_str16(state->files[state->file_count].name, L"config.sys");
-    state->files[state->file_count].is_directory = FALSE;
-    state->files[state->file_count].size = 512;
-    state->file_count++;
+    if (state->file_count < 32) {
+        copy_str16(state->files[state->file_count].name, L"config.sys");
+        state->files[state->file_count].is_directory = FALSE;
+        state->files[state->file_count].size = 512;
+        state->file_count++;
+    }
     
-    copy_str16(state->files[state->file_count].name, L"data.bin");
-    state->files[state->file_count].is_directory = FALSE;
-    state->files[state->file_count].size = 4096;
-    state->file_count++;
+    if (state->file_count < 32) {
+        copy_str16(state->files[state->file_count].name, L"data.bin");
+        state->files[state->file_count].is_directory = FALSE;
+        state->files[state->file_count].size = 4096;
+        state->file_count++;
+    }
 }
 
 BOOLEAN file_manager_init(UINT32 window_id) {
@@ -98,7 +110,7 @@ void file_manager_render(void) {
     
     // Draw file list
     INT32 y = 65;
-    for (UINTN i = 0; i < g_fm_state->file_count && i < 20; i++) {
+    for (UINTN i = 0; i < g_fm_state->file_count && i < 32; i++) {
         INT32 selected = (INT32)i;
         UINT32 bg_color = (selected == g_fm_state->selected_index) ? SDK_COLOR_TEXT_PRIMARY : SDK_COLOR_BG_LIGHT;
         UINT32 fg_color = (selected == g_fm_state->selected_index) ? SDK_COLOR_BG_LIGHT : SDK_COLOR_TEXT_PRIMARY;

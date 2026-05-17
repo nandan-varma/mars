@@ -86,6 +86,14 @@ void *heap_alloc(UINTN size) {
     free_block_t *block = g_free_list;
 
     while (block != NULL) {
+        // SECURITY FIX: Validate magic number before reading block size
+        if (block->magic != FREE_BLOCK_MAGIC) {
+            // Skip corrupted block and continue searching
+            prev = &block->next;
+            block = block->next;
+            continue;
+        }
+        
         if (block->size >= size) {
             UINTN remaining = block->size - size;
 
@@ -148,6 +156,12 @@ void heap_free(void *ptr) {
         return;
     }
 
+    // SECURITY FIX: Validate pointer is at correct block boundary
+    UINTN offset = ptr_byte - g_heap_base;
+    if (offset < sizeof(free_block_t) || (offset - sizeof(free_block_t)) % HEAP_ALIGNMENT != 0) {
+        return;  // Not a valid heap pointer - not at block boundary
+    }
+
     free_block_t *block = (free_block_t *)(ptr_byte - sizeof(free_block_t));
 
     // SECURITY FIX #4: Validate magic number before using block metadata
@@ -155,6 +169,9 @@ void heap_free(void *ptr) {
     if (block->magic != FREE_BLOCK_MAGIC) {
         return;  // Block is corrupted, silently ignore
     }
+
+    // SECURITY FIX: Clear magic number to detect double-free attempts
+    block->magic = 0;
 
     spinlock_acquire(&g_heap_lock);
 
@@ -179,7 +196,8 @@ void heap_free(void *ptr) {
     free_block_t *merged = g_free_list;
     while (merged != NULL && merged->next != NULL) {
         UINT8 *block_end = (UINT8 *)merged + sizeof(free_block_t) + merged->size;
-        if (block_end == (UINT8 *)merged->next) {
+        // SECURITY FIX: Validate magic number on next block before merging
+        if (block_end == (UINT8 *)merged->next && merged->next->magic == FREE_BLOCK_MAGIC) {
             merged->size += sizeof(free_block_t) + merged->next->size;
             merged->next = merged->next->next;
         } else {

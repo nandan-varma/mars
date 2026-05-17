@@ -7,6 +7,7 @@
 #include "sdk/sdk_graphics.h"
 #include "sdk/sdk_input.h"
 #include "sdk/sdk_ui.h"
+#include <limits.h>
 
 // ============================================================================
 // Calculator App State
@@ -76,23 +77,55 @@ static BOOLEAN on_operation_button_click(sdk_component_t *button) {
     }
     
     if (g_calc_state->operation != L'\0') {
-        // Perform pending operation
+        // Perform pending operation with overflow checks
+        INT64 tmp = 0;
+        BOOLEAN ok = TRUE;
         switch (g_calc_state->operation) {
-            case L'+':
-                g_calc_state->current_value = g_calc_state->previous_value + new_value;
-                break;
-            case L'-':
-                g_calc_state->current_value = g_calc_state->previous_value - new_value;
-                break;
-            case L'*':
-                g_calc_state->current_value = g_calc_state->previous_value * new_value;
-                break;
-            case L'/':
-                if (new_value != 0) {
-                    g_calc_state->current_value = g_calc_state->previous_value / new_value;
+            case L'+': {
+                if ((new_value > 0 && g_calc_state->previous_value > INT64_MAX - new_value) ||
+                    (new_value < 0 && g_calc_state->previous_value < INT64_MIN - new_value)) {
+                    ok = FALSE;
+                } else {
+                    tmp = g_calc_state->previous_value + new_value;
                 }
-                break;
+            } break;
+            case L'-': {
+                if ((-new_value > 0 && g_calc_state->previous_value > INT64_MAX + new_value) ||
+                    (-new_value < 0 && g_calc_state->previous_value < INT64_MIN + new_value)) {
+                    ok = FALSE;
+                } else {
+                    tmp = g_calc_state->previous_value - new_value;
+                }
+            } break;
+            case L'*': {
+                if (g_calc_state->previous_value == 0 || new_value == 0) {
+                    tmp = 0;
+                } else {
+                    INT64 a = g_calc_state->previous_value;
+                    INT64 b = new_value;
+                    INT64 abs_a = a < 0 ? -a : a;
+                    INT64 abs_b = b < 0 ? -b : b;
+                    if (abs_a > INT64_MAX / (UINT64)abs_b) {
+                        ok = FALSE;
+                    } else {
+                        tmp = a * b;
+                    }
+                }
+            } break;
+            case L'/': {
+                if (new_value != 0) {
+                    tmp = g_calc_state->previous_value / new_value;
+                } else {
+                    ok = FALSE;
+                }
+            } break;
         }
+
+        if (!ok) {
+            // Saturate on overflow/invalid
+            tmp = (g_calc_state->previous_value >= 0) ? INT64_MAX : INT64_MIN;
+        }
+        g_calc_state->current_value = tmp;
     } else {
         g_calc_state->current_value = new_value;
     }
@@ -138,22 +171,52 @@ static BOOLEAN on_equals_click(sdk_component_t *button) {
     }
     
     if (g_calc_state->operation != L'\0') {
+        INT64 tmp = 0;
+        BOOLEAN ok = TRUE;
         switch (g_calc_state->operation) {
-            case L'+':
-                g_calc_state->current_value = g_calc_state->previous_value + new_value;
-                break;
-            case L'-':
-                g_calc_state->current_value = g_calc_state->previous_value - new_value;
-                break;
-            case L'*':
-                g_calc_state->current_value = g_calc_state->previous_value * new_value;
-                break;
-            case L'/':
-                if (new_value != 0) {
-                    g_calc_state->current_value = g_calc_state->previous_value / new_value;
+            case L'+': {
+                if ((new_value > 0 && g_calc_state->previous_value > INT64_MAX - new_value) ||
+                    (new_value < 0 && g_calc_state->previous_value < INT64_MIN - new_value)) {
+                    ok = FALSE;
+                } else {
+                    tmp = g_calc_state->previous_value + new_value;
                 }
-                break;
+            } break;
+            case L'-': {
+                if ((-new_value > 0 && g_calc_state->previous_value > INT64_MAX + new_value) ||
+                    (-new_value < 0 && g_calc_state->previous_value < INT64_MIN + new_value)) {
+                    ok = FALSE;
+                } else {
+                    tmp = g_calc_state->previous_value - new_value;
+                }
+            } break;
+            case L'*': {
+                if (g_calc_state->previous_value == 0 || new_value == 0) {
+                    tmp = 0;
+                } else {
+                    INT64 a = g_calc_state->previous_value;
+                    INT64 b = new_value;
+                    INT64 abs_a = a < 0 ? -a : a;
+                    INT64 abs_b = b < 0 ? -b : b;
+                    if (abs_a > INT64_MAX / (UINT64)abs_b) {
+                        ok = FALSE;
+                    } else {
+                        tmp = a * b;
+                    }
+                }
+            } break;
+            case L'/': {
+                if (new_value != 0) {
+                    tmp = g_calc_state->previous_value / new_value;
+                } else {
+                    ok = FALSE;
+                }
+            } break;
         }
+        if (!ok) {
+            tmp = (g_calc_state->previous_value >= 0) ? INT64_MAX : INT64_MIN;
+        }
+        g_calc_state->current_value = tmp;
         g_calc_state->operation = L'\0';
     }
     
@@ -205,6 +268,7 @@ BOOLEAN calculator_init(UINT32 window_id) {
     // Create display label
     g_calc_state->display_label = sdk_component_create(SDK_COMPONENT_LABEL);
     if (g_calc_state->display_label == NULL) {
+        calculator_cleanup();
         return FALSE;
     }
     sdk_component_set_position(g_calc_state->display_label, 10, 10);
@@ -212,11 +276,17 @@ BOOLEAN calculator_init(UINT32 window_id) {
     sdk_label_set_text(g_calc_state->display_label, g_calc_state->display_text);
     sdk_label_set_color(g_calc_state->display_label, SDK_COLOR_WHITE, SDK_COLOR_BLUE);
     
+    // Ensure buttons are initialized to NULL in case of early failures
+    for (INT32 i = 0; i < 16; i++) {
+        g_calc_state->buttons[i] = NULL;
+    }
+
     // Create number buttons (0-9)
     INT32 x = 10, y = 60;
     for (INT32 i = 0; i < 10; i++) {
         g_calc_state->buttons[i] = sdk_component_create(SDK_COMPONENT_BUTTON);
         if (g_calc_state->buttons[i] == NULL) {
+            calculator_cleanup();
             return FALSE;
         }
         
@@ -236,6 +306,7 @@ BOOLEAN calculator_init(UINT32 window_id) {
     for (INT32 i = 0; i < 4; i++) {
         g_calc_state->buttons[10 + i] = sdk_component_create(SDK_COMPONENT_BUTTON);
         if (g_calc_state->buttons[10 + i] == NULL) {
+            calculator_cleanup();
             return FALSE;
         }
         
@@ -248,6 +319,7 @@ BOOLEAN calculator_init(UINT32 window_id) {
     // Create equals button
     g_calc_state->equals_button = sdk_component_create(SDK_COMPONENT_BUTTON);
     if (g_calc_state->equals_button == NULL) {
+        calculator_cleanup();
         return FALSE;
     }
     sdk_component_set_position(g_calc_state->equals_button, 310, 200);
@@ -259,6 +331,7 @@ BOOLEAN calculator_init(UINT32 window_id) {
     // Create clear button
     g_calc_state->clear_button = sdk_component_create(SDK_COMPONENT_BUTTON);
     if (g_calc_state->clear_button == NULL) {
+        calculator_cleanup();
         return FALSE;
     }
     sdk_component_set_position(g_calc_state->clear_button, 310, 250);
@@ -288,12 +361,19 @@ void calculator_render(void) {
     // Render all components
     sdk_component_render(g_calc_state->display_label);
     
-    for (INT32 i = 0; i < 14; i++) {
-        sdk_component_render(g_calc_state->buttons[i]);
+    for (INT32 i = 0; i < 16; i++) {
+        if (g_calc_state->buttons[i] != NULL) {
+            sdk_component_render(g_calc_state->buttons[i]);
+        }
     }
-    
-    sdk_component_render(g_calc_state->equals_button);
-    sdk_component_render(g_calc_state->clear_button);
+
+    if (g_calc_state->equals_button != NULL) {
+        sdk_component_render(g_calc_state->equals_button);
+    }
+
+    if (g_calc_state->clear_button != NULL) {
+        sdk_component_render(g_calc_state->clear_button);
+    }
 }
 
 // ============================================================================
@@ -306,17 +386,17 @@ void calculator_handle_input(const input_event_t *event) {
     }
     
     // Route input to components
-    for (INT32 i = 0; i < 14; i++) {
-        if (sdk_component_handle_input(g_calc_state->buttons[i], event)) {
+    for (INT32 i = 0; i < 16; i++) {
+        if (g_calc_state->buttons[i] != NULL && sdk_component_handle_input(g_calc_state->buttons[i], event)) {
             return;
         }
     }
-    
-    if (sdk_component_handle_input(g_calc_state->equals_button, event)) {
+
+    if (g_calc_state->equals_button != NULL && sdk_component_handle_input(g_calc_state->equals_button, event)) {
         return;
     }
-    
-    if (sdk_component_handle_input(g_calc_state->clear_button, event)) {
+
+    if (g_calc_state->clear_button != NULL && sdk_component_handle_input(g_calc_state->clear_button, event)) {
         return;
     }
 }

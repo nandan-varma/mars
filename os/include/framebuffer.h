@@ -22,4 +22,8 @@ void framebuffer_present_region(INT32 x, INT32 y, INT32 width, INT32 height);
 void drawChar(INT32 x, INT32 y, CHAR16 c, UINT32 fg, UINT32 bg);
 void drawString(INT32 x, INT32 y, const CHAR16 *text, UINT32 fg, UINT32 bg);
 
+/* Accessors */
+UINT32 framebuffer_get_width(void);
+UINT32 framebuffer_get_height(void);
+
 #endif

@@ -37,6 +37,7 @@ BOOLEAN settings_init(UINT32 window_id) {
     g_settings_state->volume_slider = sdk_component_create(SDK_COMPONENT_SLIDER);
     
     if (g_settings_state->brightness_slider == NULL || g_settings_state->volume_slider == NULL) {
+        settings_cleanup();
         return FALSE;
     }
     
@@ -64,11 +65,15 @@ void settings_render(void) {
     
     // Brightness slider
     sdk_graphics_text(20, 50, L"Brightness:", SDK_COLOR_TEXT_PRIMARY, SDK_COLOR_BG_LIGHT);
-    sdk_component_render(g_settings_state->brightness_slider);
-    
+    if (g_settings_state->brightness_slider != NULL) {
+        sdk_component_render(g_settings_state->brightness_slider);
+    }
+
     // Volume slider
     sdk_graphics_text(20, 110, L"Volume:", SDK_COLOR_TEXT_PRIMARY, SDK_COLOR_BG_LIGHT);
-    sdk_component_render(g_settings_state->volume_slider);
+    if (g_settings_state->volume_slider != NULL) {
+        sdk_component_render(g_settings_state->volume_slider);
+    }
 }
 
 void settings_handle_input(const input_event_t *event) {
@@ -76,8 +81,12 @@ void settings_handle_input(const input_event_t *event) {
         return;
     }
     
-    sdk_component_handle_input(g_settings_state->brightness_slider, event);
-    sdk_component_handle_input(g_settings_state->volume_slider, event);
+    if (g_settings_state->brightness_slider != NULL) {
+        sdk_component_handle_input(g_settings_state->brightness_slider, event);
+    }
+    if (g_settings_state->volume_slider != NULL) {
+        sdk_component_handle_input(g_settings_state->volume_slider, event);
+    }
 }
 
 void settings_cleanup(void) {

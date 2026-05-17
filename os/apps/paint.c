@@ -50,6 +50,12 @@ void paint_handle_input(const input_event_t *event) {
     
     INT32 x, y;
     if (sdk_input_get_mouse_pos(event, &x, &y)) {
+        /* Validate coordinates are within framebuffer bounds before drawing */
+        UINT32 w = sdk_graphics_get_width();
+        UINT32 h = sdk_graphics_get_height();
+        if (x < 0 || y < 0 || (UINT32)x >= w || (UINT32)y >= h) {
+            return;
+        }
         if (sdk_input_is_left_pressed(event)) {
             if (g_paint_state->drawing && g_paint_state->last_x >= 0) {
                 // Draw line from last position to current position for smooth strokes

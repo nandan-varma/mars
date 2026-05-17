@@ -194,3 +194,11 @@ void drawString(INT32 x, INT32 y, const CHAR16 *text, UINT32 fg, UINT32 bg) {
         cursor_x += 8;
     }
 }
+
+UINT32 framebuffer_get_width(void) {
+    return g_framebuffer.width;
+}
+
+UINT32 framebuffer_get_height(void) {
+    return g_framebuffer.height;
+}
