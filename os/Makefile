@@ -138,6 +138,7 @@ SRCS := \
 	drivers/mouse_absolute.c \
 	drivers/block.c \
 	drivers/network.c \
+	drivers/pci.c \
 	kernel/network.c \
 	drivers/audio.c \
 	graphics/framebuffer.c \

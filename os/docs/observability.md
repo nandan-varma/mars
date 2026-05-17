@@ -63,6 +63,7 @@ Domains identify the subsystem that emitted a record. Codes are domain-specific.
 | `0x0810–0x0821` | Network stack | `kernel/network.c` |
 | `0x0830` | Network app | `apps/network_app.c` |
 | `0x0900–0x0903` | Audio driver | `drivers/audio.c` |
+| `0x0A00–0x0A10` | PCI enumeration | `drivers/pci.c` |
 | `0xDEAD` | Panic / crash capture | `kernel/diag.c` (`diag_capture_crash`) |
 
 Codes inside a domain are documented at the call site. When you add a new domain, **append to this table in the same PR** — the table is authoritative.
@@ -85,6 +86,7 @@ These come from `kernel.c` and indicate how far boot got. Useful in panic dumps 
 | 100 | `input_init` |
 | 110 | `wm_init` |
 | 120 | `vfs_init` |
+| 130 | `pci_init` (M5 scaffold — populates the PCI device table) |
 | 200 | `services_and_apps` (last init step before scheduler_run) |
 
 ## When the smoke test fails

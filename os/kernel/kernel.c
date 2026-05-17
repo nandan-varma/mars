@@ -16,6 +16,7 @@
 #include "vm.h"
 #include "wm.h"
 #include "block.h"
+#include "pci.h"
 
 #ifndef SCHED_TIMER_PREEMPTIVE
 #define SCHED_TIMER_PREEMPTIVE 1
@@ -179,6 +180,12 @@ static BOOLEAN stage_wm_init(const platform_context_t *platform) {
     return TRUE;
 }
 
+static BOOLEAN stage_pci_init(const platform_context_t *platform) {
+    (void)platform;
+    (void)pci_enumerate();
+    return TRUE;
+}
+
 static BOOLEAN stage_vfs_init(const platform_context_t *platform) {
     (void)platform;
     vfs_init();
@@ -259,6 +266,7 @@ void kernel_main(const boot_info_t *boot_info) {
         { 100, stage_input_init },
         { 110, stage_wm_init },
         { 120, stage_vfs_init },
+        { 130, stage_pci_init },
         { 200, stage_services_and_apps }
     };
 
