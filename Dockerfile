@@ -8,7 +8,12 @@
 #   docker build -t marsos-build .
 #   docker run --rm -v "$PWD":/src -w /src/os marsos-build make ci
 
-FROM debian:bookworm-20251110-slim
+# Note: for byte-reproducible output across time, replace the tag below
+# with a digest pin (e.g. debian:bookworm-slim@sha256:<hex>) so apt
+# resolution doesn't drift. Rolling tag is fine for "two machines today
+# produce the same binary"; not for "this binary built six months ago is
+# reproducible today".
+FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
@@ -16,7 +21,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-        build-essential=12.9 \
+        build-essential \
         gcc-mingw-w64-x86-64 \
         make \
         ca-certificates \
