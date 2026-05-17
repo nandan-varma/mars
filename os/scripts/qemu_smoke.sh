@@ -34,15 +34,17 @@ if [ ! -f "$OS_DIR/esp/EFI/BOOT/BOOTX64.EFI" ]; then
   make all >&2
 fi
 
-# OVMF discovery — match the Makefile's defaults and add common Linux paths.
+# OVMF discovery — Debian bookworm only ships the 4M variant, so try that
+# first. Then fall back to the legacy 2M paths and Homebrew layouts.
 if [ -z "${OVMF_CODE:-}" ]; then
   for candidate in \
-    /opt/homebrew/share/edk2/ovmf/OVMF_CODE.fd \
-    /opt/homebrew/Cellar/qemu/*/share/qemu/edk2-x86_64-code.fd \
-    /usr/share/OVMF/OVMF_CODE.fd \
     /usr/share/OVMF/OVMF_CODE_4M.fd \
+    /usr/share/OVMF/OVMF_CODE.fd \
+    /usr/share/edk2-ovmf/OVMF_CODE.fd \
     /usr/share/edk2/ovmf/OVMF_CODE.fd \
-    /usr/share/qemu/OVMF.fd; do
+    /usr/share/qemu/OVMF.fd \
+    /opt/homebrew/share/edk2/ovmf/OVMF_CODE.fd \
+    /opt/homebrew/Cellar/qemu/*/share/qemu/edk2-x86_64-code.fd; do
     # shellcheck disable=SC2086
     set -- $candidate
     if [ -f "$1" ]; then
@@ -81,14 +83,18 @@ echo "[smoke] sentinel:  '$SENTINEL'" >&2
 
 # -no-reboot so a triple fault halts instead of looping forever.
 # nographic puts everything we care about onto the serial file already.
+# Force TCG accel — GitHub runners don't have KVM and QEMU sometimes asserts
+# on auto-detection. Also write QEMU's own stderr alongside the serial log
+# so an abort like SIGABRT leaves a trail.
 "$QEMU" \
-  -machine pc -m 512M \
+  -machine pc,accel=tcg -m 512M \
   -display none \
   -no-reboot \
   -drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE" \
   -drive "if=ide,index=0,format=raw,file=$PRIVATE_IMG" \
   -drive "format=raw,file=fat:rw:$PRIVATE_ESP" \
   -serial "file:$SERIAL_LOG" \
+  2> "$ARTIFACTS_DIR/qemu.stderr" \
   &
 QEMU_PID=$!
 
@@ -121,6 +127,12 @@ wait "$QEMU_PID" 2>/dev/null || true
 echo "---- serial.log (tail) ----" >&2
 tail -n 40 "$SERIAL_LOG" >&2 || true
 echo "---- end serial.log ----" >&2
+
+if [ -s "$ARTIFACTS_DIR/qemu.stderr" ]; then
+  echo "---- qemu.stderr ----" >&2
+  cat "$ARTIFACTS_DIR/qemu.stderr" >&2 || true
+  echo "---- end qemu.stderr ----" >&2
+fi
 
 if [ "$status" -eq 0 ]; then
   echo "[smoke] PASS — found sentinel '$SENTINEL'" >&2

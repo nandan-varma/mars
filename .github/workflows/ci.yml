@@ -103,11 +103,13 @@ jobs:
           TIMEOUT_SECONDS: 60
         run: make -C os smoke-test
 
-      - name: Upload serial log
+      - name: Upload smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-serial-log
-          path: os/build/smoke/serial.log
+          name: smoke-artifacts
+          path: |
+            os/build/smoke/serial.log
+            os/build/smoke/qemu.stderr
           if-no-files-found: warn
           retention-days: 14
