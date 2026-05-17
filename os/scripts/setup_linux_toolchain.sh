@@ -24,7 +24,9 @@ $SUDO apt-get install -y --no-install-recommends \
   qemu-system-x86 \
   ovmf \
   ca-certificates \
-  make
+  make \
+  mtools \
+  gdisk
 
 echo "Ensuring x86_64 MinGW compiler exists..."
 if ! command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1; then

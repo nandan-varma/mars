@@ -10,7 +10,7 @@ if ! command -v brew >/dev/null 2>&1; then
 fi
 
 echo "Installing baseline dependencies..."
-brew install qemu mingw-w64 x86_64-elf-gcc x86_64-elf-binutils || true
+brew install qemu mingw-w64 x86_64-elf-gcc x86_64-elf-binutils mtools gptfdisk || true
 
 echo "Ensuring x86_64 MinGW compiler exists..."
 if ! command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1; then

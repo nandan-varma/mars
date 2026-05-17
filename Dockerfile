@@ -27,6 +27,8 @@ RUN apt-get update \
         ca-certificates \
         qemu-system-x86 \
         ovmf \
+        mtools \
+        gdisk \
  && rm -rf /var/lib/apt/lists/*
 
 # Verify the toolchain is wired up. If this fails, the image build fails

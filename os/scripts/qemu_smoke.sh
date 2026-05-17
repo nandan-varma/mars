@@ -83,17 +83,35 @@ echo "[smoke] sentinel:  '$SENTINEL'" >&2
 
 # -no-reboot so a triple fault halts instead of looping forever.
 # nographic puts everything we care about onto the serial file already.
+# Build a real FAT image of the ESP via mtools, then attach it as an IDE
+# drive. Avoids QEMU's flaky vvfat ("fat:rw:") backend which has been
+# silently SIGABRT'ing on GitHub's ubuntu-latest runner. Requires mtools
+# on the host (Debian: mtools; macOS Homebrew: mtools).
+ESP_FAT_IMG="$ARTIFACTS_DIR/esp.img"
+if command -v mformat >/dev/null 2>&1 && command -v mcopy >/dev/null 2>&1; then
+  # 32MiB FAT16 image — plenty of room for BOOTX64.EFI plus the small
+  # .app manifests in user-apps.
+  dd if=/dev/zero of="$ESP_FAT_IMG" bs=1048576 count=32 status=none
+  mformat -i "$ESP_FAT_IMG" -F -v MARSOS ::
+  mmd -i "$ESP_FAT_IMG" ::/EFI
+  mmd -i "$ESP_FAT_IMG" ::/EFI/BOOT
+  mcopy -i "$ESP_FAT_IMG" -s "$OS_DIR/esp/EFI/BOOT/BOOTX64.EFI" ::/EFI/BOOT/BOOTX64.EFI
+  ESP_DRIVE_ARG=("-drive" "format=raw,file=$ESP_FAT_IMG,if=ide")
+  echo "[smoke] using real FAT image at $ESP_FAT_IMG" >&2
+else
+  ESP_DRIVE_ARG=("-drive" "format=raw,file=fat:rw:$PRIVATE_ESP")
+  echo "[smoke] mtools not installed — falling back to QEMU vvfat (less reliable)" >&2
+fi
+
 # Force TCG accel — GitHub runners don't have KVM and QEMU sometimes asserts
-# on auto-detection. Drop the unused IDE drive (the kernel boots straight
-# from the ESP) and use q35 which is the modern reference machine and
-# more consistently supported across QEMU versions. Capture QEMU's own
-# stderr to qemu.stderr so an abort like SIGABRT leaves a trail.
+# on auto-detection. Capture QEMU's own stderr to qemu.stderr so an abort
+# like SIGABRT leaves a trail.
 "$QEMU" \
   -machine q35,accel=tcg -m 512M \
   -display none \
   -no-reboot \
   -drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE" \
-  -drive "format=raw,file=fat:rw:$PRIVATE_ESP" \
+  "${ESP_DRIVE_ARG[@]}" \
   -serial "file:$SERIAL_LOG" \
   -monitor none \
   2> "$ARTIFACTS_DIR/qemu.stderr" \
