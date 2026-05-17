@@ -84,3 +84,30 @@ jobs:
           path: os/esp/EFI/BOOT/BOOTX64.EFI
           if-no-files-found: error
           retention-days: 14
+
+  qemu-smoke:
+    name: QEMU boot smoke test
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain + QEMU + OVMF
+        run: ./os/scripts/setup_linux_toolchain.sh
+
+      - name: Build
+        run: make -C os all
+
+      - name: Boot under QEMU and wait for stage 200
+        env:
+          TIMEOUT_SECONDS: 60
+        run: make -C os smoke-test
+
+      - name: Upload serial log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-serial-log
+          path: os/build/smoke/serial.log
+          if-no-files-found: warn
+          retention-days: 14

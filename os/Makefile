@@ -99,6 +99,7 @@ SRCS := \
 	kernel/platform.c \
 	kernel/diag.c \
 	kernel/panic.c \
+	kernel/serial.c \
 	kernel/interrupts.c \
 	kernel/heap.c \
 	kernel/spinlock.c \
@@ -144,7 +145,7 @@ SDK_LIB := lib/sdk/libmarssdk.a
 
 OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS))
 
-.PHONY: all clean run debug esp run-gui run-fs run-apps user-apps disk-image test-host ci
+.PHONY: all clean run debug esp run-gui run-fs run-apps user-apps disk-image test-host ci smoke-test
 
 HOST_TEST_BINS := \
 	$(BUILD_DIR)/tests/test_event_bus_contract \
@@ -329,3 +330,8 @@ ci:
 	$(MAKE) clean
 	$(MAKE) all
 	$(MAKE) test-host
+
+# Headless boot smoke test. Boots BOOTX64.EFI under QEMU, captures serial,
+# and asserts that the kernel reached the final init stage.
+smoke-test: all
+	./scripts/qemu_smoke.sh

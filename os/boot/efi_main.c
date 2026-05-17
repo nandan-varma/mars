@@ -2,21 +2,7 @@
 
 #include "boot_info.h"
 #include "kernel.h"
-
-static void serial_write_char(UINT8 ch) {
-    UINT16 port = 0x3F8;
-    __asm__ volatile("outb %0, %1" : : "a"(ch), "Nd"(port));
-}
-
-static void serial_write_text(const char *text) {
-    if (text == NULL) {
-        return;
-    }
-
-    for (UINTN i = 0; text[i] != 0; ++i) {
-        serial_write_char((UINT8)text[i]);
-    }
-}
+#include "serial.h"
 
 static EFI_STATUS find_gop(EFI_BOOT_SERVICES *bs, EFI_GRAPHICS_OUTPUT_PROTOCOL **gop_out) {
     EFI_GUID gop_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
@@ -167,7 +153,8 @@ static EFI_STATUS collect_memory_map(
 
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table) {
     (void)image_handle;
-    serial_write_text("[mars] efi_main:start\r\n");
+    serial_init();
+    serial_write_str("[mars] efi_main:start\r\n");
     EFI_BOOT_SERVICES *bs = system_table->BootServices;
     EFI_GRAPHICS_OUTPUT_PROTOCOL *gop = NULL;
     EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL *text_input_ex = NULL;
@@ -180,7 +167,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
 
     EFI_STATUS status = find_gop(bs, &gop);
     if (EFI_ERROR(status)) {
-        serial_write_text("[mars] efi_main:fail:gop\r\n");
+        serial_write_str("[mars] efi_main:fail:gop\r\n");
         return status;
     }
 
@@ -204,7 +191,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
         &descriptor_version
     );
     if (EFI_ERROR(status)) {
-        serial_write_text("[mars] efi_main:fail:memmap\r\n");
+        serial_write_str("[mars] efi_main:fail:memmap\r\n");
         return status;
     }
 
@@ -224,8 +211,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     boot_info.input.absolute_pointer = absolute_pointer;
     boot_info.runtime.runtime_services = system_table->RuntimeServices;
 
-    serial_write_text("[mars] efi_main:handoff\r\n");
+    serial_write_str("[mars] efi_main:handoff\r\n");
     kernel_main(&boot_info);
-    serial_write_text("[mars] efi_main:return\r\n");
+    serial_write_str("[mars] efi_main:return\r\n");
     return EFI_SUCCESS;
 }
