@@ -229,7 +229,7 @@ BOOLEAN fat_read_file(const CHAR8 *filename, UINT8 *buffer, UINTN max_size, UINT
     if (g_fat.type == FAT_TYPE_32) {
         found = read_directory_entry(cluster_to_sector(g_fat.root_dir_start), 0, filename, &entry);
     } else {
-        found = read_directory_entry(g_fat.root_dir_start, g_fat.root_dir_sectors * (g_fat.bytes_per_sector / 32), filename, &entry);
+        found = read_directory_entry(g_fat.root_dir_start, (UINTN)g_fat.root_dir_sectors * (g_fat.bytes_per_sector / 32), filename, &entry);
     }
 
     if (!found) {
