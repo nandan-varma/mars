@@ -166,6 +166,7 @@ HOST_TEST_BINS := \
 	$(BUILD_DIR)/tests/test_heap \
 	$(BUILD_DIR)/tests/test_freelist \
 	$(BUILD_DIR)/tests/test_vm_builder \
+	$(BUILD_DIR)/tests/test_vm_activation \
 	$(BUILD_DIR)/tests/test_vm \
 	$(BUILD_DIR)/tests/test_input_security_fuzz \
 	$(BUILD_DIR)/tests/test_process_stress \
@@ -302,6 +303,10 @@ $(BUILD_DIR)/tests/test_freelist: tests/test_freelist.c
 	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
 
 $(BUILD_DIR)/tests/test_vm_builder: tests/test_vm_builder.c
+	@mkdir -p $(dir $@)
+	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
+
+$(BUILD_DIR)/tests/test_vm_activation: tests/test_vm_activation.c
 	@mkdir -p $(dir $@)
 	$(HOST_CC) $(HOST_CFLAGS) -Iinclude $^ -o $@
 
